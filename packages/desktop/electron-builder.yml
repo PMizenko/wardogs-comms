@@ -30,7 +30,7 @@ asarUnpack:
 publish:
   provider: github
   owner: PMizenko
-  repo: wardogs-voip
+  repo: wardogs-comms
   releaseType: release
 
 # Lets the OAuth flow hand the session token back via wardogs-voip://auth
