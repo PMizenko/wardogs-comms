@@ -31,6 +31,9 @@ publish:
   provider: github
   owner: PMizenko
   repo: wardogs-comms
+  # This value is also copied into app-update.yml inside the app, and it is what
+  # the *client* looks for. It must stay "release": a client set to "draft"
+  # hunts for draft releases, which needs a token no player will ever have.
   releaseType: release
 
 # Lets the OAuth flow hand the session token back via wardogs-voip://auth

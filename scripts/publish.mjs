@@ -52,6 +52,19 @@ if (!owner || !repo) {
 }
 const slug = `${owner}/${repo}`;
 
+/**
+ * A client configured for draft releases hunts for drafts, which needs a token
+ * no player will ever have. Catch it here rather than in the field.
+ */
+if (/^\s{2}releaseType:\s*draft/m.test(builderYml)) {
+  die(
+    'publish.releaseType is "draft" in electron-builder.yml.\n' +
+      'That value is copied into app-update.yml inside the app, so every client\n' +
+      'built from it would look for draft releases and find nothing.\n' +
+      'Set it to "release".',
+  );
+}
+
 const serverUrl = (() => {
   if (process.env.WARDOGS_SERVER_URL) return process.env.WARDOGS_SERVER_URL.trim();
   const envPath = join(root, '.env');
@@ -70,7 +83,8 @@ if (/localhost|127\.0\.0\.1/.test(serverUrl)) {
 
 // --- preflight -------------------------------------------------------------
 
-const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? run('gh auth token').stdout?.trim();
+const token =
+  process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? run('gh auth token').stdout?.trim();
 if (!token) {
   die('No GitHub token. Sign in with `gh auth login`, or set GH_TOKEN.');
 }
@@ -83,7 +97,9 @@ if (repoCheck.status !== 0) {
   );
 }
 
-const existing = run(`gh release view v${version} --repo ${slug} --json tagName`, { stdio: 'pipe' });
+const existing = run(`gh release view v${version} --repo ${slug} --json tagName`, {
+  stdio: 'pipe',
+});
 if (existing.status === 0) {
   die(
     `Release v${version} already exists in ${slug}.\n` +
@@ -135,11 +151,32 @@ if (result.error || result.status !== 0) {
   die(`Build failed: ${result.error?.message ?? `exit code ${result.status}`}`);
 }
 
+// A run interrupted mid-upload can leave the release as a draft. Installed
+// copies ignore drafts, so one left behind reaches nobody.
+const draftCheck = run(`gh release view v${version} --repo ${slug} --json isDraft -q .isDraft`, {
+  stdio: 'pipe',
+});
+if (draftCheck.stdout?.trim() === 'true') {
+  const published = run(`gh release edit v${version} --repo ${slug} --draft=false`, {
+    stdio: 'pipe',
+  });
+  if (published.status !== 0) {
+    console.warn(
+      '\n  Uploaded, but the release is still a draft and could not be published:\n' +
+        `  ${published.stderr?.trim()}\n\n` +
+        '  Publish it by hand, or nobody will see the update:\n' +
+        `    gh release edit v${version} --repo ${slug} --draft=false\n`,
+    );
+  }
+}
+
 console.log(
   `\n\x1b[32mPublished v${version}\x1b[0m\n\n` +
     `  https://github.com/${slug}/releases/tag/v${version}\n\n` +
-    '  The release starts as a draft. Open it, write what changed, and hit\n' +
-    '  Publish - installed copies only see published releases.\n\n' +
-    '  Then commit and tag:\n' +
+    '  Installed copies will find it on their next check.\n',
+);
+
+console.log(
+  '  Record it in git:\n' +
     `    git commit -am "Release v${version}" && git tag v${version} && git push --follow-tags\n`,
 );
