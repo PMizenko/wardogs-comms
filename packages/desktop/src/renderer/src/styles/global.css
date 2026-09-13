@@ -303,6 +303,114 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- lobby ---------------------------------------------------------------- */
+
+.lobby {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 10px;
+}
+
+.lobby__head {
+  text-align: center;
+}
+
+.lobby__switch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.lobby__switch small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+/* --- platoon browser ------------------------------------------------------ */
+
+.browser {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 14px 16px;
+}
+
+.browser__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.browser__empty {
+  margin: 6px 0 2px;
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+  padding: 14px 0;
+}
+
+.browser__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.browser__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s;
+}
+.browser__row:hover {
+  background: var(--panel-2);
+}
+
+.browser__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.browser__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browser__name svg {
+  color: var(--gold);
+  flex: none;
+}
+
+.browser__meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+.browser__password {
+  width: 140px;
+  padding: 5px 9px;
+  font-size: 12px;
+  flex: none;
+}
+
 /* --- platoon header ------------------------------------------------------- */
 
 .platoon-head {
@@ -343,6 +451,72 @@ select {
 }
 .code-chip:hover {
   border-color: var(--gold-dim);
+}
+
+/* --- platoon-leader controls ---------------------------------------------- */
+
+.admin-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  padding: 11px 14px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--gold-dim);
+  border-radius: var(--radius-sm);
+  background: #101116;
+}
+
+.admin-bar__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.admin-bar__number {
+  width: 64px;
+  padding: 5px 8px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.admin-bar__password {
+  width: 150px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.admin-bar__hint {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.admin-bar__state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.admin-bar__state.is-on {
+  color: var(--gold);
+}
+
+.lock-chip {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--gold-dim);
+  color: var(--gold);
+  flex: none;
 }
 
 /* --- command net ---------------------------------------------------------- */
@@ -604,6 +778,44 @@ select {
   color: var(--danger);
 }
 
+/* Volume trim.
+   Dimmed rather than hidden: this window gets glanced at mid-match, and a
+   control you have to hunt for by hovering may as well not exist. Goes gold
+   and full strength once someone is actually turned down. */
+.player .player__volume-btn {
+  flex: none;
+  opacity: 0.28;
+  transition: opacity 0.12s, color 0.12s;
+}
+.player:hover .player__volume-btn,
+.player .player__volume-btn:focus-visible {
+  opacity: 1;
+}
+.player .player__volume-btn.is-trimmed {
+  opacity: 1;
+  color: var(--gold);
+}
+
+.player--tuning {
+  gap: 8px;
+  background: var(--panel-2);
+}
+
+.player__volume {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent, var(--gold));
+}
+
+.player__volume-value {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  min-width: 3.2em;
+  text-align: right;
+}
+
 .player__admin {
   display: none;
   gap: 3px;
@@ -724,6 +936,29 @@ select {
   background: #3a1d1d;
   border-color: #6b3030;
   color: #ff8a8a;
+}
+
+/* Push-to-talk vs open mic, reachable without opening settings. */
+.ptt-toggle {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+.ptt-toggle:hover {
+  border-color: #3a3e49;
+  color: var(--text);
+}
+.ptt-toggle--open {
+  background: #2a2214;
+  border-color: var(--gold-dim);
+  color: var(--gold);
 }
 
 /* the live "on air" readout */

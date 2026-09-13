@@ -1,5 +1,5 @@
 import type { ChannelId, SquadId } from './squads.js';
-import type { PlatoonState, UserIdentity, VoiceGrants } from './types.js';
+import type { PlatoonState, PlatoonSummary, UserIdentity, VoiceGrants } from './types.js';
 
 /**
  * Control-plane protocol.
@@ -9,15 +9,18 @@ import type { PlatoonState, UserIdentity, VoiceGrants } from './types.js';
  * and the short-lived tokens that authorise a client to open a LiveKit room.
  */
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 // --- client -> server -----------------------------------------------------
 
 export type ClientMessage =
   | { t: 'ping' }
-  | { t: 'platoon:create'; name: string }
-  | { t: 'platoon:join'; code: string }
+  | { t: 'platoon:create'; name: string; password?: string; listed?: boolean }
+  /** Join by code, or by id when picked out of the browser. */
+  | { t: 'platoon:join'; code?: string; platoonId?: string; password?: string }
   | { t: 'platoon:leave' }
+  /** Ask for the public browser listing. */
+  | { t: 'platoon:list' }
   /** Take a slot in a squad. `asLeader` claims the leader slot if it is free. */
   | { t: 'squad:join'; squadId: SquadId; asLeader: boolean }
   /** Drop back to the lobby without leaving the platoon. */
@@ -30,6 +33,12 @@ export type ClientMessage =
   | { t: 'admin:promote'; playerId: string }
   | { t: 'admin:kick'; playerId: string }
   | { t: 'admin:rename-squad'; squadId: SquadId; role: string }
+  /** Platoon-leader only: how many players fit in one squad. */
+  | { t: 'admin:squad-size'; size: number }
+  /** Platoon-leader only: set or clear the join password (empty string clears). */
+  | { t: 'admin:password'; password: string }
+  /** Platoon-leader only: show or hide the platoon in the public browser. */
+  | { t: 'admin:listed'; listed: boolean }
   /** Mic/deafen state, mirrored to the roster so others see the icons. */
   | { t: 'state:mic'; micMuted: boolean; deafened: boolean }
   /** Throttled radio-activity beacon so the whole platoon sees live nets. */
@@ -45,6 +54,7 @@ export type ServerErrorCode =
   | 'leader_taken'
   | 'not_in_platoon'
   | 'forbidden'
+  | 'bad_password'
   | 'bad_request'
   | 'internal';
 
@@ -56,6 +66,8 @@ export type ServerMessage =
   | { t: 'platoon:state'; platoon: PlatoonState; grants: VoiceGrants }
   /** Sent when the client is no longer in any platoon. */
   | { t: 'platoon:none' }
+  /** Answer to `platoon:list`. */
+  | { t: 'platoon:browser'; platoons: PlatoonSummary[] }
   | { t: 'player:transmit'; playerId: string; channel: ChannelId; active: boolean }
   | { t: 'kicked'; reason: string }
   | { t: 'error'; code: ServerErrorCode; message: string };

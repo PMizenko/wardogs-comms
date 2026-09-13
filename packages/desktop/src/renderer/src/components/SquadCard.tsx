@@ -13,6 +13,8 @@ interface Props {
   remoteTransmit: Record<string, ChannelId>;
   canAdmin: boolean;
   full: boolean;
+  /** Players allowed in this squad, set by the platoon leader. */
+  capacity: number;
 }
 
 export function SquadCard({
@@ -23,6 +25,7 @@ export function SquadCard({
   remoteTransmit,
   canAdmin,
   full,
+  capacity,
 }: Props) {
   const joinSquad = useApp((s) => s.joinSquad);
   const leaveSquad = useApp((s) => s.leaveSquad);
@@ -70,7 +73,7 @@ export function SquadCard({
     <section className={classes} style={{ '--accent': squad.color } as CSSProperties}>
       <header className="squad__head">
         <span className="squad__count">
-          {players.length}/9
+          {players.length}/{capacity}
         </span>
         <div className="squad__name">{squad.name}</div>
 

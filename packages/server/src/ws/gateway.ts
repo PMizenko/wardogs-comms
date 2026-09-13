@@ -88,14 +88,28 @@ async function handleMessage(conn: Connection, msg: ClientMessage): Promise<void
       return;
 
     case 'platoon:create':
-      platoons.create(conn.user, typeof msg.name === 'string' ? msg.name : '');
+      platoons.create(conn.user, typeof msg.name === 'string' ? msg.name : '', {
+        password: typeof msg.password === 'string' ? msg.password : '',
+        listed: msg.listed !== false,
+      });
       return;
 
-    case 'platoon:join':
-      if (typeof msg.code !== 'string' || msg.code.trim().length !== 6) {
+    case 'platoon:join': {
+      const byCode = typeof msg.code === 'string' && msg.code.trim().length === 6;
+      const byId = typeof msg.platoonId === 'string' && msg.platoonId.length > 0;
+      if (!byCode && !byId) {
         throw new PlatoonError('bad_request', 'A join code is six characters');
       }
-      platoons.join(conn.user, msg.code);
+      platoons.join(conn.user, {
+        code: byCode ? msg.code : undefined,
+        platoonId: byId ? msg.platoonId : undefined,
+        password: typeof msg.password === 'string' ? msg.password : '',
+      });
+      return;
+    }
+
+    case 'platoon:list':
+      send(conn.socket, { t: 'platoon:browser', platoons: platoons.list() });
       return;
 
     case 'platoon:leave': {
@@ -139,6 +153,18 @@ async function handleMessage(conn: Connection, msg: ClientMessage): Promise<void
     case 'admin:rename-squad':
       if (!isSquadId(msg.squadId)) throw new PlatoonError('bad_request', 'Unknown squad');
       platoons.renameSquad(userId, msg.squadId, String(msg.role ?? ''));
+      return;
+
+    case 'admin:squad-size':
+      platoons.setSquadSize(userId, Number(msg.size));
+      return;
+
+    case 'admin:password':
+      platoons.setPassword(userId, String(msg.password ?? ''));
+      return;
+
+    case 'admin:listed':
+      platoons.setListed(userId, msg.listed === true);
       return;
 
     case 'state:mic':

@@ -4,6 +4,7 @@ import {
   DEFAULT_SQUADS,
   type ChannelId,
   type PlatoonState,
+  type PlatoonSummary,
   type PlayerState,
   type ServerMessage,
   type SquadId,
@@ -44,6 +45,9 @@ interface AppState {
   deafened: boolean;
 
   devices: AudioDevices;
+  /** Public platoon browser, refreshed on demand from the lobby. */
+  browser: PlatoonSummary[];
+  browserLoading: boolean;
   notice: { kind: 'error' | 'info'; text: string } | null;
   settingsOpen: boolean;
   busy: boolean;
@@ -52,8 +56,10 @@ interface AppState {
   boot(): Promise<void>;
   signIn(): Promise<void>;
   signOut(): Promise<void>;
-  createPlatoon(name: string): void;
-  joinPlatoon(code: string): void;
+  createPlatoon(name: string, options?: { password?: string; listed?: boolean }): void;
+  joinPlatoon(code: string, password?: string): void;
+  joinPlatoonById(platoonId: string, password?: string): void;
+  refreshBrowser(): void;
   leavePlatoon(): void;
   joinSquad(squadId: SquadId, asLeader: boolean): void;
   leaveSquad(): void;
@@ -63,6 +69,13 @@ interface AppState {
   promotePlayer(playerId: string): void;
   kickPlayer(playerId: string): void;
   renameSquad(squadId: SquadId, role: string): void;
+  setSquadSize(size: number): void;
+  setPlatoonPassword(password: string): void;
+  setPlatoonListed(listed: boolean): void;
+  /** Local playback trim for one teammate, 0..1. */
+  setPlayerVolume(playerId: string, volume: number): Promise<void>;
+  /** Flip the squad net between push-to-talk and open mic. */
+  toggleSquadPtt(): Promise<void>;
   toggleMute(): void;
   toggleDeafen(): void;
   patchSettings(patch: Parameters<Window['wardogs']['updateSettings']>[0]): Promise<void>;
@@ -109,6 +122,8 @@ export const useApp = create<AppState>((set, get) => ({
   deafened: false,
 
   devices: { inputs: [], outputs: [] },
+  browser: [],
+  browserLoading: false,
   notice: null,
   settingsOpen: false,
   busy: false,
@@ -196,11 +211,26 @@ export const useApp = create<AppState>((set, get) => ({
 
   // --- platoon ------------------------------------------------------------
 
-  createPlatoon(name) {
-    socket?.send({ t: 'platoon:create', name });
+  createPlatoon(name, options = {}) {
+    socket?.send({
+      t: 'platoon:create',
+      name,
+      password: options.password ?? '',
+      listed: options.listed !== false,
+    });
   },
-  joinPlatoon(code) {
-    socket?.send({ t: 'platoon:join', code: code.trim().toUpperCase() });
+  joinPlatoon(code, password) {
+    socket?.send({ t: 'platoon:join', code: code.trim().toUpperCase(), password: password ?? '' });
+  },
+  joinPlatoonById(platoonId, password) {
+    socket?.send({ t: 'platoon:join', platoonId, password: password ?? '' });
+  },
+  refreshBrowser() {
+    set({ browserLoading: true });
+    socket?.send({ t: 'platoon:list' });
+    // The answer clears the flag; this only stops it spinning forever if the
+    // socket is down.
+    setTimeout(() => set({ browserLoading: false }), 4000);
   },
   leavePlatoon() {
     socket?.send({ t: 'platoon:leave' });
@@ -228,6 +258,35 @@ export const useApp = create<AppState>((set, get) => ({
   },
   renameSquad(squadId, role) {
     socket?.send({ t: 'admin:rename-squad', squadId, role });
+  },
+  setSquadSize(size) {
+    socket?.send({ t: 'admin:squad-size', size });
+  },
+  setPlatoonPassword(password) {
+    socket?.send({ t: 'admin:password', password });
+  },
+  setPlatoonListed(listed) {
+    socket?.send({ t: 'admin:listed', listed });
+  },
+
+  async setPlayerVolume(playerId, volume) {
+    const clamped = Math.min(1, Math.max(0, volume));
+    const playerVolumes = { ...get().settings.audio.playerVolumes };
+    // Drop entries that are back at the default rather than accumulating them.
+    if (Math.abs(clamped - 1) < 0.001) delete playerVolumes[playerId];
+    else playerVolumes[playerId] = clamped;
+    await get().patchSettings({ audio: { playerVolumes } });
+  },
+
+  async toggleSquadPtt() {
+    const current = get().settings.transmit.squad;
+    await get().patchSettings({
+      transmit: {
+        squad: current === 'ptt' ? 'open' : 'ptt',
+        // Only one net may sit open, or you would be on the air twice.
+        command: current === 'ptt' ? 'ptt' : get().settings.transmit.command,
+      },
+    });
   },
 
   // --- local audio state --------------------------------------------------
@@ -322,6 +381,10 @@ function handleServerMessage(
       return;
     }
 
+    case 'platoon:browser':
+      set({ browser: message.platoons, browserLoading: false });
+      return;
+
     case 'platoon:none':
       set({ platoon: null, grants: { squad: null, command: null }, remoteTransmit: {} });
       engine?.setRoster('', new Map());
@@ -369,6 +432,7 @@ const ERROR_TEXT: Record<string, string> = {
   platoon_full: 'Platoon je plný.',
   squad_full: 'Tenhle squad je plný.',
   leader_taken: 'Squad už má svého velitele.',
+  bad_password: 'Špatné heslo.',
   not_in_platoon: 'Nejsi v žádném platoonu.',
   forbidden: 'Na tohle nemáš oprávnění.',
   bad_request: 'Neplatný požadavek.',

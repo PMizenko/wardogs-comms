@@ -1,14 +1,37 @@
 import { EventEmitter } from 'node:events';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import {
   DEFAULT_SQUADS,
   isSquadId,
+  SQUAD_SIZE_DEFAULT,
+  SQUAD_SIZE_MAX,
+  SQUAD_SIZE_MIN,
   type PlatoonState,
+  type PlatoonSummary,
   type PlayerState,
   type SquadId,
   type UserIdentity,
 } from '@wardogs/shared';
 import { config } from '../config.js';
+
+/**
+ * Join passwords, kept out of PlatoonState so they cannot ride along in a
+ * roster broadcast. Hashed rather than stored: these get reused from people's
+ * other accounts however often you ask them not to.
+ */
+interface PasswordRecord {
+  salt: Buffer;
+  hash: Buffer;
+}
+
+function hashPassword(password: string, salt = randomBytes(16)): PasswordRecord {
+  return { salt, hash: scryptSync(password, salt, 32) };
+}
+
+function passwordMatches(record: PasswordRecord, attempt: string): boolean {
+  const candidate = scryptSync(attempt, record.salt, 32);
+  return timingSafeEqual(record.hash, candidate);
+}
 
 export class PlatoonError extends Error {
   constructor(
@@ -19,6 +42,7 @@ export class PlatoonError extends Error {
       | 'leader_taken'
       | 'not_in_platoon'
       | 'forbidden'
+      | 'bad_password'
       | 'bad_request',
     message: string,
   ) {
@@ -52,6 +76,8 @@ function generateCode(taken: (code: string) => boolean): string {
 export class PlatoonManager extends EventEmitter {
   private readonly platoons = new Map<string, PlatoonState>();
   private readonly byCode = new Map<string, string>();
+  /** platoonId -> hashed join password, for the ones that have one. */
+  private readonly passwords = new Map<string, PasswordRecord>();
   /** playerId -> platoonId */
   private readonly membership = new Map<string, string>();
   /** playerId -> pending removal after a dropped connection */
@@ -96,11 +122,17 @@ export class PlatoonManager extends EventEmitter {
 
   // --- lifecycle ----------------------------------------------------------
 
-  create(user: UserIdentity, name: string): PlatoonState {
+  create(
+    user: UserIdentity,
+    name: string,
+    options: { password?: string; listed?: boolean } = {},
+  ): PlatoonState {
     this.leave(user.id);
 
     const id = randomUUID();
     const code = generateCode((c) => this.byCode.has(c));
+    const password = options.password?.trim() ?? '';
+
     const platoon: PlatoonState = {
       id,
       code,
@@ -120,7 +152,12 @@ export class PlatoonManager extends EventEmitter {
         },
       ],
       createdAt: Date.now(),
+      squadSize: SQUAD_SIZE_DEFAULT,
+      hasPassword: password.length > 0,
+      listed: options.listed !== false,
     };
+
+    if (password) this.passwords.set(id, hashPassword(password));
 
     this.platoons.set(id, platoon);
     this.byCode.set(code, id);
@@ -129,12 +166,30 @@ export class PlatoonManager extends EventEmitter {
     return platoon;
   }
 
-  join(user: UserIdentity, code: string): PlatoonState {
-    const platoonId = this.byCode.get(code.trim().toUpperCase());
+  /**
+   * Join by code, or by id when the player picked one out of the browser.
+   *
+   * The password is only demanded of newcomers: someone reconnecting into a
+   * slot they already hold has already proved themselves once, and a dropped
+   * connection mid-match is the wrong moment to ask again.
+   */
+  join(
+    user: UserIdentity,
+    by: { code?: string; platoonId?: string; password?: string },
+  ): PlatoonState {
+    const platoonId = by.platoonId ?? this.byCode.get((by.code ?? '').trim().toUpperCase());
     const platoon = platoonId ? this.platoons.get(platoonId) : undefined;
     if (!platoon) throw new PlatoonError('platoon_not_found', 'No platoon with that code');
 
     const existing = this.playerIn(platoon, user.id);
+
+    if (!existing) {
+      const record = this.passwords.get(platoon.id);
+      if (record && !passwordMatches(record, by.password ?? '')) {
+        throw new PlatoonError('bad_password', 'Wrong password');
+      }
+    }
+
     if (existing) {
       // Reconnect into the slot they already hold, keeping squad and rank.
       this.cancelReap(user.id);
@@ -177,6 +232,7 @@ export class PlatoonManager extends EventEmitter {
     if (platoon.players.length === 0) {
       this.platoons.delete(platoon.id);
       this.byCode.delete(platoon.code);
+      this.passwords.delete(platoon.id);
       this.emit('closed', platoon.id);
       return;
     }
@@ -252,7 +308,7 @@ export class PlatoonManager extends EventEmitter {
     const { platoon, player } = this.require(playerId);
 
     const occupants = platoon.players.filter((p) => p.squadId === squadId && p.id !== playerId);
-    if (occupants.length >= config.limits.squadSize) {
+    if (occupants.length >= platoon.squadSize) {
       throw new PlatoonError('squad_full', 'That squad is full');
     }
 
@@ -311,7 +367,7 @@ export class PlatoonManager extends EventEmitter {
     if (squadId !== null) {
       if (!isSquadId(squadId)) throw new PlatoonError('bad_request', 'Unknown squad');
       const size = platoon.players.filter((p) => p.squadId === squadId && p.id !== targetId).length;
-      if (size >= config.limits.squadSize) throw new PlatoonError('squad_full', 'That squad is full');
+      if (size >= platoon.squadSize) throw new PlatoonError('squad_full', 'That squad is full');
     }
 
     target.squadId = squadId;
@@ -359,6 +415,72 @@ export class PlatoonManager extends EventEmitter {
     if (!squad) throw new PlatoonError('bad_request', 'Unknown squad');
     squad.role = role.trim().slice(0, 24) || squad.role;
     this.changed(platoon);
+  }
+
+  /**
+   * Resize squads. Shrinking below what a squad already holds is allowed and
+   * nobody is thrown out - the limit only gates new arrivals, so a leader can
+   * tighten things up without ejecting half the platoon mid-match.
+   */
+  setSquadSize(actorId: string, size: number): void {
+    const { platoon } = this.requireLeader(actorId);
+    if (!Number.isInteger(size) || size < SQUAD_SIZE_MIN || size > SQUAD_SIZE_MAX) {
+      throw new PlatoonError(
+        'bad_request',
+        `Squad size must be between ${SQUAD_SIZE_MIN} and ${SQUAD_SIZE_MAX}`,
+      );
+    }
+    if (platoon.squadSize === size) return;
+    platoon.squadSize = size;
+    this.changed(platoon);
+  }
+
+  /** An empty password clears it. */
+  setPassword(actorId: string, password: string): void {
+    const { platoon } = this.requireLeader(actorId);
+    const next = password.trim();
+
+    if (next.length === 0) {
+      this.passwords.delete(platoon.id);
+      platoon.hasPassword = false;
+    } else {
+      if (next.length > 64) throw new PlatoonError('bad_request', 'Password is too long');
+      this.passwords.set(platoon.id, hashPassword(next));
+      platoon.hasPassword = true;
+    }
+    this.changed(platoon);
+  }
+
+  setListed(actorId: string, listed: boolean): void {
+    const { platoon } = this.requireLeader(actorId);
+    if (platoon.listed === listed) return;
+    platoon.listed = listed;
+    this.changed(platoon);
+  }
+
+  /**
+   * The public browser.
+   *
+   * Carries no join code and no roster: a locked platoon must stay locked even
+   * though anyone can see that it exists.
+   */
+  list(): PlatoonSummary[] {
+    const summaries: PlatoonSummary[] = [];
+    for (const platoon of this.platoons.values()) {
+      if (!platoon.listed) continue;
+      const leader = platoon.players.find((p) => p.id === platoon.leaderId);
+      summaries.push({
+        id: platoon.id,
+        name: platoon.name,
+        leaderName: leader?.name ?? 'Unknown',
+        players: platoon.players.length,
+        capacity: Math.min(platoon.squadSize * platoon.squads.length, config.limits.platoonSize),
+        hasPassword: platoon.hasPassword,
+        createdAt: platoon.createdAt,
+      });
+    }
+    // Busiest first: an empty platoon is rarely the one you meant to join.
+    return summaries.sort((a, b) => b.players - a.players || a.createdAt - b.createdAt);
   }
 
   // --- per-player flags ---------------------------------------------------

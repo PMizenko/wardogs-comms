@@ -43,7 +43,34 @@ export interface PlatoonState {
   squads: SquadDefinition[];
   players: PlayerState[];
   createdAt: number;
+  /** Players allowed per squad. Set by the platoon leader. */
+  squadSize: number;
+  /** Whether joining needs a password. The password itself never leaves the server. */
+  hasPassword: boolean;
+  /** Whether this platoon shows up in the public browser. */
+  listed: boolean;
 }
+
+/**
+ * A platoon as seen from the outside, before joining.
+ *
+ * Deliberately thin: no join code and no roster, so the browser cannot be used
+ * to walk into a platoon that has a password on it.
+ */
+export interface PlatoonSummary {
+  id: string;
+  name: string;
+  leaderName: string;
+  players: number;
+  capacity: number;
+  hasPassword: boolean;
+  createdAt: number;
+}
+
+export const SQUAD_SIZE_MIN = 1;
+/** Ceiling the server will accept for a squad. */
+export const SQUAD_SIZE_MAX = 30;
+export const SQUAD_SIZE_DEFAULT = 9;
 
 /** Everything a client needs to open one LiveKit room. */
 export interface ChannelGrant {

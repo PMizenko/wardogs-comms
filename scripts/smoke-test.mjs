@@ -308,6 +308,135 @@ async function main() {
   check('reconnect restores the rank', charlie2.me(restored).role === 'squad_leader');
   check('reconnect restores the command net', restored.grants.command !== null);
 
+  section('Squad size');
+  const echo = await new Client('Echo').signIn();
+  const foxtrot = await new Client('Foxtrot').signIn();
+  const golf = await new Client('Golf').signIn();
+  await Promise.all([echo.connect(), foxtrot.connect(), golf.connect()]);
+
+  echo.clear();
+  echo.send({ t: 'platoon:create', name: 'Size Test' });
+  let sized = await echo.waitForState(() => true, 'size platoon');
+  const sizeCode = sized.platoon.code;
+  check('a new platoon starts at nine per squad', sized.platoon.squadSize === 9);
+
+  echo.clear();
+  echo.send({ t: 'admin:squad-size', size: 2 });
+  sized = await echo.waitForState((m) => m.platoon.squadSize === 2, 'shrunk to 2');
+  check('the leader can resize squads', sized.platoon.squadSize === 2);
+
+  echo.clear();
+  echo.send({ t: 'squad:join', squadId: 1, asLeader: false });
+  await echo.waitForState((m) => echo.me(m).squadId === 1, 'echo in squad 1');
+
+  foxtrot.clear();
+  foxtrot.send({ t: 'platoon:join', code: sizeCode });
+  await foxtrot.waitForState(() => true, 'foxtrot joined');
+  foxtrot.clear();
+  foxtrot.send({ t: 'squad:join', squadId: 1, asLeader: false });
+  await foxtrot.waitForState((m) => foxtrot.me(m).squadId === 1, 'foxtrot in squad 1');
+
+  golf.clear();
+  golf.send({ t: 'platoon:join', code: sizeCode });
+  await golf.waitForState(() => true, 'golf joined');
+  golf.clear();
+  golf.send({ t: 'squad:join', squadId: 1, asLeader: false });
+  const squadFull = await golf.waitFor((m) => m.t === 'error', 'squad_full');
+  check('the new limit is enforced', squadFull.code === 'squad_full', squadFull.code);
+
+  echo.clear();
+  echo.send({ t: 'admin:squad-size', size: 12 });
+  await echo.waitForState((m) => m.platoon.squadSize === 12, 'raised to 12');
+  golf.clear();
+  golf.send({ t: 'squad:join', squadId: 1, asLeader: false });
+  const golfIn = await golf.waitForState((m) => golf.me(m).squadId === 1, 'golf in squad 1');
+  check('raising the limit lets more people in', golf.me(golfIn).squadId === 1);
+  check(
+    'a squad can hold more than the old nine',
+    golfIn.platoon.squadSize === 12 && golfIn.platoon.players.filter((p) => p.squadId === 1).length === 3,
+  );
+
+  echo.clear();
+  echo.send({ t: 'admin:squad-size', size: 999 });
+  const absurd = await echo.waitFor((m) => m.t === 'error', 'size rejected');
+  check('an out-of-range squad size is refused', absurd.code === 'bad_request', absurd.code);
+
+  foxtrot.clear();
+  foxtrot.send({ t: 'admin:squad-size', size: 5 });
+  const notLeader = await foxtrot.waitFor((m) => m.t === 'error', 'forbidden');
+  check('only the platoon leader may resize', notLeader.code === 'forbidden', notLeader.code);
+
+  section('Password');
+  const hotel = await new Client('Hotel').signIn();
+  const india = await new Client('India').signIn();
+  await Promise.all([hotel.connect(), india.connect()]);
+
+  const SECRET = 'tajne-heslo-123';
+  hotel.clear();
+  hotel.send({ t: 'platoon:create', name: 'Locked', password: SECRET, listed: true });
+  const locked = await hotel.waitForState(() => true, 'locked platoon');
+  check('a platoon can be opened with a password', locked.platoon.hasPassword === true);
+  check(
+    'the password never travels in the roster',
+    !JSON.stringify(locked.platoon).includes(SECRET),
+  );
+
+  india.clear();
+  india.send({ t: 'platoon:join', code: locked.platoon.code });
+  const noPassword = await india.waitFor((m) => m.t === 'error', 'bad_password');
+  check('joining with no password is refused', noPassword.code === 'bad_password', noPassword.code);
+
+  india.clear();
+  india.send({ t: 'platoon:join', code: locked.platoon.code, password: 'wrong' });
+  const wrongPassword = await india.waitFor((m) => m.t === 'error', 'bad_password');
+  check('a wrong password is refused', wrongPassword.code === 'bad_password');
+
+  india.clear();
+  india.send({ t: 'platoon:join', code: locked.platoon.code, password: SECRET });
+  const unlocked = await india.waitForState((m) => india.me(m) !== undefined, 'india joined');
+  check('the right password gets you in', india.me(unlocked) !== undefined);
+
+  hotel.clear();
+  hotel.send({ t: 'admin:password', password: '' });
+  const unlockedState = await hotel.waitForState(
+    (m) => m.platoon.hasPassword === false,
+    'password cleared',
+  );
+  check('the leader can take the password off', unlockedState.platoon.hasPassword === false);
+
+  section('Platoon browser');
+  hotel.clear();
+  hotel.send({ t: 'platoon:list' });
+  const browser = await hotel.waitFor((m) => m.t === 'platoon:browser', 'browser');
+  const entry = browser.platoons.find((p) => p.id === locked.platoon.id);
+  check('a listed platoon shows up', entry !== undefined);
+  check('the browser reports occupancy', entry?.players === 2 && entry?.capacity > 0);
+  check(
+    'the browser never carries join codes',
+    !JSON.stringify(browser.platoons).includes(locked.platoon.code),
+  );
+  check('the browser never carries the roster', !Array.isArray(entry?.players));
+
+  // Joining straight out of the browser, without ever seeing a code.
+  golf.clear();
+  golf.send({ t: 'platoon:join', platoonId: locked.platoon.id });
+  const viaBrowser = await golf.waitForState(
+    (m) => m.platoon.id === locked.platoon.id,
+    'golf joined by id',
+  );
+  check('you can join by id from the browser', viaBrowser.platoon.id === locked.platoon.id);
+
+  hotel.clear();
+  hotel.send({ t: 'admin:listed', listed: false });
+  await hotel.waitForState((m) => m.platoon.listed === false, 'unlisted');
+  hotel.clear();
+  hotel.send({ t: 'platoon:list' });
+  const browser2 = await hotel.waitFor((m) => m.t === 'platoon:browser', 'browser again');
+  check(
+    'an unlisted platoon is hidden from the browser',
+    !browser2.platoons.some((p) => p.id === locked.platoon.id),
+  );
+
   section('Bad input');
   alpha.clear();
   alpha.send({ t: 'platoon:join', code: 'XX' });
@@ -319,7 +448,9 @@ async function main() {
   const badSquad = await alpha.waitFor((m) => m.t === 'error', 'unknown squad');
   check('an unknown squad id is rejected', badSquad.code === 'bad_request', badSquad.code);
 
-  for (const client of [alpha, bravo, charlie2, delta]) client.close();
+  for (const client of [alpha, bravo, charlie2, delta, echo, foxtrot, golf, hotel, india]) {
+    client.close();
+  }
   await sleep(200);
 
   console.log(

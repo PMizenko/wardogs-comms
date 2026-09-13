@@ -51,6 +51,12 @@ export interface Settings {
     duckOnCommand: boolean;
     /** Level the ducked voices drop to, 0..1. */
     duckLevel: number;
+    /**
+     * Per-player playback gain, keyed by player id, 0..2. Missing means 1.
+     * Local to this machine - turning someone down is your business, not the
+     * platoon's.
+     */
+    playerVolumes: Record<string, number>;
     /** Play a short blip when a net opens or closes. */
     keyTones: boolean;
   };
@@ -84,8 +90,11 @@ export const DEFAULT_SETTINGS: Settings = {
     // squad chatter is not gated away mid-sentence.
     noiseSuppression: true,
     echoCancellation: true,
-    autoGainControl: true,
+    // Off by default: AGC rides the gain up between sentences and turns room
+    // noise and keyboard clatter into transmissions.
+    autoGainControl: false,
     outputVolume: 1,
+    playerVolumes: {},
     duckOnCommand: true,
     // Quiet enough to get out of the way, loud enough that you still know
     // someone is talking and can key back in.

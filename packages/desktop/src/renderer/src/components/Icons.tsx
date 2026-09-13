@@ -123,6 +123,36 @@ export const UserMinusIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const VolumeIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+  </Svg>
+);
+
+export const VolumeOffIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <line x1="22" y1="9" x2="16" y2="15" />
+    <line x1="16" y1="9" x2="22" y2="15" />
+  </Svg>
+);
+
+export const LockIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="4" y="11" width="16" height="10" rx="2" />
+    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </Svg>
+);
+
+export const RefreshIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <polyline points="21 3 21 9 15 9" />
+    <polyline points="3 21 3 15 9 15" />
+    <path d="M20.5 9A8.5 8.5 0 0 0 6 5.3L3 8M3.5 15A8.5 8.5 0 0 0 18 18.7l3-2.7" />
+  </Svg>
+);
+
 export const DiscordIcon = (p: IconProps) => (
   <Svg {...p} fill="currentColor" stroke="none">
     <path d="M19.3 5.6A16.7 16.7 0 0 0 15.1 4.3l-.2.4a15.5 15.5 0 0 1 3.7 1.2 13 13 0 0 0-11.2 0 15.5 15.5 0 0 1 3.7-1.2l-.2-.4a16.7 16.7 0 0 0-4.2 1.3C3.3 9.3 2.6 12.9 3 16.4a16.8 16.8 0 0 0 5.1 2.6l.6-1A11 11 0 0 1 7 17.2l.3-.2a11.8 11.8 0 0 0 9.4 0l.3.2a11 11 0 0 1-1.7.8l.6 1a16.8 16.8 0 0 0 5.1-2.6c.5-4-.7-7.6-1.7-10.8zM9.5 14.4c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm5 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z" />

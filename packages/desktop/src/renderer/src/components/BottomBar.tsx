@@ -30,6 +30,11 @@ export function BottomBar() {
   const openSettings = useApp((s) => s.openSettings);
   const netState = useApp((s) => s.netState);
   const hotkeys = useApp((s) => s.settings.hotkeys);
+  const squadMode = useApp((s) => s.settings.transmit.squad);
+  const toggleSquadPtt = useApp((s) => s.toggleSquadPtt);
+
+  const openMic = squadMode === 'open';
+  const squadKey = hotkeys.squad;
 
   const squad = me?.squadId != null ? platoon?.squads.find((s) => s.id === me.squadId) : undefined;
   const squadColor = squad?.color ?? COMMAND_COLOR;
@@ -81,6 +86,18 @@ export function BottomBar() {
       </div>
 
       <div className="bottombar__spacer" />
+
+      <button
+        className={`ptt-toggle${openMic ? ' ptt-toggle--open' : ''}`}
+        onClick={() => void toggleSquadPtt()}
+        title={
+          openMic
+            ? 'Otevřený mikrofon — slyší tě squad pořád. Klikni pro push-to-talk.'
+            : `Push-to-talk${squadKey ? ` (${squadKey.label})` : ' — klávesa nenastavena'}. Klikni pro otevřený mikrofon.`
+        }
+      >
+        {openMic ? 'OTEVŘENÝ MIK' : 'PUSH-TO-TALK'}
+      </button>
 
       <button
         className={`round-btn${micMuted ? ' round-btn--active' : ''}`}

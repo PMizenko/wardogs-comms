@@ -8,9 +8,8 @@ import {
 import { selectMe, useApp } from '../state/store.js';
 import { SquadCard } from './SquadCard.js';
 import { PlayerRow } from './PlayerRow.js';
-import { CopyIcon, ExitIcon } from './Icons.js';
-
-const SQUAD_SIZE = 9;
+import { PlatoonAdminBar } from './PlatoonAdminBar.js';
+import { CopyIcon, ExitIcon, LockIcon } from './Icons.js';
 
 export function PlatoonScreen() {
   const platoon = useApp((s) => s.platoon);
@@ -67,6 +66,12 @@ export function PlatoonScreen() {
 
         <div style={{ flex: 1 }} />
 
+        {platoon.hasPassword && (
+          <span className="lock-chip" title="Platoon je chráněný heslem">
+            <LockIcon size={12} />
+          </span>
+        )}
+
         <button className="code-chip" onClick={copyCode} title="Zkopírovat kód">
           {platoon.code}
           <CopyIcon size={13} />
@@ -78,6 +83,8 @@ export function PlatoonScreen() {
           Opustit
         </button>
       </div>
+
+      {canAdmin && <PlatoonAdminBar platoon={platoon} />}
 
       <section className={`command${commandHot ? ' command--hot' : ''}`}>
         <header className="command__head">
@@ -137,7 +144,8 @@ export function PlatoonScreen() {
               speakingIds={speakingIds}
               remoteTransmit={remoteTransmit}
               canAdmin={!!canAdmin}
-              full={members.length >= SQUAD_SIZE && me?.squadId !== squad.id}
+              capacity={platoon.squadSize}
+              full={members.length >= platoon.squadSize && me?.squadId !== squad.id}
             />
           );
         })}

@@ -349,7 +349,8 @@ export class VoiceEngine {
     if (
       previous.audio.outputVolume !== settings.audio.outputVolume ||
       previous.audio.duckOnCommand !== settings.audio.duckOnCommand ||
-      previous.audio.duckLevel !== settings.audio.duckLevel
+      previous.audio.duckLevel !== settings.audio.duckLevel ||
+      previous.audio.playerVolumes !== settings.audio.playerVolumes
     ) {
       this.applyGain();
     }
@@ -425,8 +426,11 @@ export class VoiceEngine {
       duckOnCommand && base > 0 ? topSpeakingRank(this.currentSpeakers(), this.ranks) : 0;
 
     for (const el of this.players.values()) {
-      const rank = this.ranks.get(el.dataset['participant'] ?? '') ?? 0;
-      this.rampTo(el, shouldDuck(rank, topRank) ? base * duckLevel : base);
+      const identity = el.dataset['participant'] ?? '';
+      const rank = this.ranks.get(identity) ?? 0;
+      const level = shouldDuck(rank, topRank) ? base * duckLevel : base;
+      // Per-player trim, set locally by whoever is listening.
+      this.rampTo(el, level * (this.settings.audio.playerVolumes[identity] ?? 1));
     }
   }
 

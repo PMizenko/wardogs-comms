@@ -48,7 +48,7 @@ dostat — ani upraveným klientem. Když velitele degraduješ, server mu při d
 změně rosteru vystaví nové tokeny bez command místnosti a klient to spojení
 zahodí.
 
-Ověřeno testem: `npm run smoke` projede 36 kontrol včetně dekódování těch JWT.
+Ověřeno testem: `npm run smoke` projede 55 kontrol včetně dekódování těch JWT.
 
 ### Vysílání je exkluzivní
 
@@ -75,6 +75,37 @@ lupne. Vypnout nebo přenastavit jde v *Nastavení → Zvuk*.
 
 Rozhodovací tabulku hlídá `npm run test:ducking` — obrácené porovnání by ztišilo
 velitele místo žvanění, což je přesně naopak.
+
+### Hlasitost po jednotlivých hráčích
+
+Vedle každého jména je ikona reproduktoru — klikni a vyjede posuvník 0–100 %.
+Koho ztlumíš, toho má ikona zlatě, takže po zápase vidíš, komu jsi ubral a proč
+ho neslyšíš. Je to **jen u tebe**, nastavení se nikam neposílá.
+
+### Push-to-talk se přepíná jedním klikem
+
+Vpravo dole je přepínač **PUSH-TO-TALK / OTEVŘENÝ MIK**. Otevřený mikrofon může
+běžet jen na jednom kanálu, jinak bys byl ve vzduchu dvakrát — přepnutím squadu
+na otevřený se command vrátí na PTT.
+
+### Velikost squadu a hesla
+
+Velitel platoonu má nad kanály lištu, kde nastaví:
+
+- **Lidí ve squadu** — 1 až 30. Zmenšení nikoho nevyhodí, limit platí jen na
+  nově příchozí.
+- **Heslo** — bez něj se připojí kdokoli s kódem. Na serveru se ukládá jen
+  otisk, ne heslo samotné, a do rosteru se nikdy neposílá.
+- **Ve veřejném seznamu** — jestli se platoon ukazuje ostatním v přehledu.
+
+### Seznam aktivních platoonů
+
+V lobby je přehled běžících platoonů: název, velitel, obsazenost a stáří.
+Obnovuje se sám každých 15 sekund. Zamčené mají visací zámek a ptají se na heslo
+až při vstupu.
+
+Seznam **nikdy nenese join kód ani roster** — jinak by zámek nedával smysl.
+Připojuje se přes id platoonu, ne přes kód.
 
 ---
 
@@ -156,6 +187,10 @@ tloukla s ovládáním hry. Aplikace tě na to na hlavní obrazovce upozorní.
 | Command | Jen pro velitele squadů, přebíjí squad |
 | Přepnout mikrofon | Rychlé ztlumení sebe |
 | Přepnout zvuk | Ztlumí i poslech (a tím i mikrofon) |
+
+**Automatická hlasitost mikrofonu je vypnutá.** Mezi větami vytáhne zisk nahoru
+a udělá z šumu v pokoji a klapání klávesnice vysílání. Zapnout jde v
+*Nastavení → Zvuk*.
 
 Když píšeš do textového pole v aplikaci, odchyt se automaticky pozastaví.
 
@@ -318,7 +353,7 @@ scripts/
 | --- | --- |
 | `npm run dev` | Server i klient najednou |
 | `npm run livekit` | LiveKit SFU v Dockeru |
-| `npm run smoke` | 36 kontrol řídicího toku (server musí běžet) |
+| `npm run smoke` | 55 kontrol řídicího toku (server musí běžet) |
 | `npm run dev:platoon` | Vytvoří platoon s 10 hráči a drží ho |
 | `npm run check:livekit` | Diagnostika hlasové části |
 | `npm run typecheck` | Typová kontrola všech balíčků |
@@ -345,6 +380,6 @@ scripts/
 ## Co zatím není
 
 - Přetahování hráčů myší mezi squady (velitel je přiřazuje tlačítky na lavičce).
-- Hlasitost po jednotlivých hráčích.
+- Zvýšení hlasitosti nad 100 % — jde jen ubrat.
 - Rádiový efekt na command kanálu.
 - Perzistentní platoony a statistiky.
