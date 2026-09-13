@@ -271,89 +271,23 @@ bez notarizace nepustí aplikaci spustit bez obcházení Gatekeeperu.
 
 ---
 
-## Nasazení na voip.alesza.eu
+## Nasazení serveru
 
-### 1. Řídicí server za HTTPS
+Krok za krokem pro Ubuntu: **[docs/DEPLOY-UBUNTU.md](docs/DEPLOY-UBUNTU.md)** —
+systemd služby, nginx, Let's Encrypt, firewall, Discord OAuth i kontrolní
+příkazy na konec.
 
-Doména je na Cloudflare a teď vrací **525 (SSL handshake failed)** — Cloudflare
-se nedomluví s origin serverem. Buď dej origin pod platný certifikát (Let's
-Encrypt) a v Cloudflare zvol SSL/TLS režim **Full (strict)**, nebo pro rychlý
-start **Flexible**, kdy Cloudflare mluví na origin po HTTP.
+Dvě věci, na kterých to nejčastěji stojí:
 
-Reverse proxy musí propouštět WebSocket upgrade na `/ws`:
+**LiveKit nesmí jít přes Cloudflare proxy.** Zvuk je WebRTC přes UDP a HTTP
+proxy ho neunese. Za oranžovým mráčkem se signalizace připojí, roster naskočí a
+nikdo nikoho neslyší — porucha, která vypadá jako funkční aplikace. Dej SFU
+vlastní záznam (`sfu.alesza.eu`) přepnutý na **DNS only** a otevři UDP
+50000–50100.
 
-```nginx
-server {
-  server_name voip.alesza.eu;
-
-  location / {
-    proxy_pass http://127.0.0.1:4000;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_read_timeout 3600s;
-  }
-}
-```
-
-V `.env` na serveru:
-
-```
-PUBLIC_URL=https://voip.alesza.eu
-ALLOW_DEV_LOGIN=false
-JWT_SECRET=<openssl rand -hex 32>
-```
-
-`ALLOW_DEV_LOGIN` **musí být vypnuté** — jinak se kdokoli přihlásí jako kdokoli.
-Server ho odmítne zapnout při `NODE_ENV=production`, ale nespoléhej na to.
-
-### 2. LiveKit NESMÍ jít přes Cloudflare proxy
-
-Tohle je past, do které spadne skoro každý. Hlas je **WebRTC přes UDP** a HTTP
-proxy ho neunese. Kdyby SFU běželo za oranžovým mráčkem, signalizace by se
-připojila, roster by naskočil — a nikdo by nikoho neslyšel.
-
-Dej SFU vlastní záznam, například `sfu.alesza.eu`, a v Cloudflare ho přepni na
-**DNS only (šedý mráček)**. Na tom stroji otevři:
-
-| Port | Protokol | K čemu |
-| --- | --- | --- |
-| 443 nebo 7880 | TCP | signalizace (WSS) |
-| 7881 | TCP | WebRTC fallback, když UDP neprojde |
-| 50000–50100 | **UDP** | vlastní zvuk |
-
-Pak v `.env` řídicího serveru:
-
-```
-LIVEKIT_URL=wss://sfu.alesza.eu
-LIVEKIT_API_KEY=<vlastni>
-LIVEKIT_API_SECRET=<vlastni>
-```
-
-Tuhle adresu dostávají klienti až za běhu, takže **není zapečená v instalátoru** —
-můžeš SFU přestěhovat bez nového buildu.
-
-Vlastní klíče (ty v `livekit.yaml` jsou vývojové a veřejně známé):
-
-```bash
-docker run --rm livekit/generate --local
-```
-
-### 3. Discord OAuth
-
-V Discord Developer Portalu přidej redirect URI přesně takhle:
-
-```
-https://voip.alesza.eu/auth/discord/callback
-```
-
-### 4. Kontrola
-
-```bash
-npm run check:livekit
-```
+**`ALLOW_DEV_LOGIN` musí být v produkci vypnuté.** Pustí dovnitř kohokoli pod
+jakýmkoli jménem. Server ho při `NODE_ENV=production` ignoruje a odmítne
+nastartovat bez Discordu, ale nespoléhej na to.
 
 ---
 

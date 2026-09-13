@@ -130,7 +130,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * this, and on some setups `localhost` resolves to IPv6 first while the server
  * is on IPv4. Retry briefly rather than failing with a bare "fetch failed".
  */
-async function waitForServer(attempts = 10) {
+async function waitForServer(attempts = 25) {
   const bases = [BASE, BASE.replace('//localhost', '//127.0.0.1')];
   let lastError;
   for (let attempt = 0; attempt < attempts; attempt++) {

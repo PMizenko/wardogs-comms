@@ -40,9 +40,15 @@ const discordClientId = optional('DISCORD_CLIENT_ID');
 const discordClientSecret = optional('DISCORD_CLIENT_SECRET');
 
 if (!allowDevLogin && (!discordClientId || !discordClientSecret)) {
+  const askedForDevLogin = process.env['ALLOW_DEV_LOGIN']?.trim().toLowerCase() === 'true';
   throw new Error(
-    'Discord OAuth is not configured. Set DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET in .env, ' +
-      'or set ALLOW_DEV_LOGIN=true for local testing without Discord.',
+    askedForDevLogin
+      ? 'Discord OAuth is not configured, and ALLOW_DEV_LOGIN is ignored when ' +
+        'NODE_ENV=production - it lets anyone sign in as anyone. Set ' +
+        'DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET in .env.'
+      : 'Discord OAuth is not configured. Set DISCORD_CLIENT_ID and ' +
+        'DISCORD_CLIENT_SECRET in .env, or set ALLOW_DEV_LOGIN=true for local ' +
+        'testing without Discord.',
   );
 }
 
