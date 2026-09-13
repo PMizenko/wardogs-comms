@@ -1,0 +1,31 @@
+# LiveKit SFU - local development configuration.
+# The keys below are DEV ONLY. Replace before exposing this to a network.
+port: 7880
+bind_addresses:
+  - ""
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+
+# Voice-only workload: Opus at conversational bitrates, no simulcast needed.
+audio:
+  # Emit active-speaker updates fast enough that the overlay feels instant.
+  active_level: 35
+  min_percentile: 40
+  update_interval: 400
+  smooth_intervals: 2
+
+keys:
+  devkey: devsecretdevsecretdevsecretdevsecret
+
+logging:
+  level: info
+  pion_level: error
+
+room:
+  # A platoon channel is short-lived; reap it quickly once the last radio drops.
+  empty_timeout: 120
+  max_participants: 60

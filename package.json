@@ -1,0 +1,36 @@
+{
+  "name": "wardogs-voip",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Platoon-style VOIP for Wardogs - squad channels + squad-leader command net",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/desktop"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @wardogs/shared",
+    "dev:server": "npm run dev -w @wardogs/server",
+    "dev:desktop": "npm run dev -w @wardogs/desktop",
+    "dev": "npm run build:shared && concurrently -n server,desktop -c cyan,magenta \"npm run dev:server\" \"npm run dev:desktop\"",
+    "build": "npm run build:shared && npm run build -w @wardogs/server && npm run build -w @wardogs/desktop",
+    "dist": "npm run build:shared && npm run dist -w @wardogs/desktop",
+    "livekit": "docker compose up -d livekit",
+    "livekit:logs": "docker compose logs -f livekit",
+    "livekit:down": "docker compose down",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "smoke": "node scripts/smoke-test.mjs",
+    "dev:platoon": "node scripts/dev-platoon.mjs",
+    "check:livekit": "node scripts/check-livekit.mjs",
+    "dist:release": "node scripts/release.mjs",
+    "test:ducking": "node --experimental-strip-types scripts/test-ducking.mjs",
+    "publish:release": "node scripts/publish.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

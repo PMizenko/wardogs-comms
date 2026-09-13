@@ -1,0 +1,18 @@
+# LiveKit SFU for local development.
+# Start with:  npm run livekit      (or: docker compose up -d livekit)
+#
+# Dev credentials live in livekit.yaml and must match LIVEKIT_API_KEY /
+# LIVEKIT_API_SECRET in your .env. Generate real ones before going public:
+#   docker run --rm livekit/generate --local
+services:
+  livekit:
+    image: livekit/livekit-server:v1.8
+    container_name: wardogs-livekit
+    command: --config /etc/livekit.yaml --node-ip 127.0.0.1
+    restart: unless-stopped
+    ports:
+      - "7880:7880"            # signaling (WebSocket + HTTP)
+      - "7881:7881"            # WebRTC over TCP fallback
+      - "50000-50100:50000-50100/udp"   # WebRTC media (UDP)
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro

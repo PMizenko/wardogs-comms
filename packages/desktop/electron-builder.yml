@@ -1,0 +1,75 @@
+appId: gg.wardogs.voip
+productName: Wardogs VOIP
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+# Native modules are staged by this hook, which then stops electron-builder
+# running its own npm install - see before-build.cjs for why that matters here.
+beforeBuild: ./before-build.cjs
+npmRebuild: false
+
+# Tray and window icons are read from process.resourcesPath at runtime, so they
+# have to travel outside the asar.
+extraResources:
+  - from: resources
+    to: .
+    filter: ['**/*']
+
+# The global key hook is a native addon; it cannot run from inside an asar.
+asarUnpack:
+  - '**/node_modules/uiohook-napi/**'
+
+# Where the app looks for updates, and where `npm run publish` uploads them.
+# electron-builder writes this into app-update.yml inside the package, so the
+# installed app knows where to check without being told.
+publish:
+  provider: github
+  owner: PMizenko
+  repo: wardogs-voip
+  releaseType: release
+
+# Lets the OAuth flow hand the session token back via wardogs-voip://auth
+protocols:
+  - name: Wardogs VOIP
+    schemes:
+      - wardogs-voip
+
+win:
+  target:
+    # The installer is what most people want; the portable exe is for anyone who
+    # cannot or will not install (locked-down machines, quick try on a friend's PC).
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  artifactName: WardogsVOIP-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Wardogs VOIP
+  # Keep the player's settings when they uninstall; reinstalling should not
+  # cost them their keybinds.
+  deleteAppDataOnUninstall: false
+  artifactName: WardogsVOIP-Setup-${version}.${ext}
+
+portable:
+  artifactName: WardogsVOIP-Portable-${version}.${ext}
+
+mac:
+  target: [dmg]
+  category: public.app-category.social-networking
+  artifactName: WardogsVOIP-${version}-${arch}.${ext}
+
+linux:
+  target: [AppImage]
+  category: Network
+  artifactName: WardogsVOIP-${version}-${arch}.${ext}

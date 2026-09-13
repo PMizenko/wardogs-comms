@@ -1,0 +1,13 @@
+node_modules/
+dist/
+out/
+build/
+release/
+*.log
+.env
+.env.local
+.DS_Store
+.cache/
+*.tsbuildinfo
+data/
+packages/desktop/node_modules/
