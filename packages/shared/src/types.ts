@@ -89,6 +89,8 @@ export interface ChannelGrant {
 export interface VoiceGrants {
   squad: ChannelGrant | null;
   command: ChannelGrant | null;
+  /** Everyone holds this; only the platoon leader may transmit on it. */
+  allcall: ChannelGrant | null;
 }
 
 export function isLeader(role: PlatoonRole): boolean {

@@ -16,6 +16,7 @@ import { DEFAULT_SETTINGS } from '../../../common/settings.js';
 import type { NetId, OverlayState, SpeakerBadge } from '../../../common/ipc.js';
 import { ControlSocket, type SocketStatus } from '../net/socket.js';
 import { VoiceEngine, type NetConnection, type SpeakingEntry } from '../voice/engine.js';
+import { playTone, setToneOutput } from '../voice/tones.js';
 
 export type Screen = 'signin' | 'lobby' | 'platoon';
 
@@ -97,6 +98,28 @@ export function selectMe(state: AppState): PlayerState | null {
   return state.platoon.players.find((p) => p.id === state.user!.id) ?? null;
 }
 
+/**
+ * Whether voice actually works right now.
+ *
+ * The control socket being up says nothing about the media path: LiveKit can be
+ * unreachable while the roster updates perfectly. That combination is the worst
+ * possible failure, because the app looks connected and you are inaudible, so
+ * it gets surfaced loudly rather than inferred from a quiet icon.
+ */
+export type VoiceHealth = 'idle' | 'connecting' | 'ok' | 'down';
+
+export function selectVoiceHealth(state: AppState): VoiceHealth {
+  const nets: Array<'squad' | 'command'> = [];
+  if (state.grants.squad) nets.push('squad');
+  if (state.grants.command) nets.push('command');
+  if (nets.length === 0) return 'idle';
+
+  const states = nets.map((net) => state.netState[net]);
+  if (states.every((s) => s === 'live')) return 'ok';
+  if (states.some((s) => s === 'connecting')) return 'connecting';
+  return 'down';
+}
+
 export function selectScreen(state: AppState): Screen {
   if (!state.settings.sessionToken || state.status === 'unauthorised') return 'signin';
   return state.platoon ? 'platoon' : 'lobby';
@@ -111,9 +134,9 @@ export const useApp = create<AppState>((set, get) => ({
   status: 'offline',
 
   platoon: null,
-  grants: { squad: null, command: null },
+  grants: { squad: null, command: null, allcall: null },
 
-  netState: { squad: 'idle', command: 'idle' },
+  netState: { squad: 'idle', command: 'idle', allcall: 'idle' },
   speaking: [],
   transmitting: null,
   remoteTransmit: {},
@@ -140,7 +163,11 @@ export const useApp = create<AppState>((set, get) => ({
         set((s) => ({ netState: { ...s.netState, [net]: state } })),
       onSpeaking: (speaking) => set({ speaking }),
       onTransmit: (net) => {
+        const previous = get().transmitting;
         set({ transmitting: net });
+        if (get().settings.audio.keyTones && net !== previous) {
+          playTone(net ? 'open' : 'close');
+        }
         announceTransmit(net);
       },
       onError: (text) => set({ notice: { kind: 'error', text } }),
@@ -151,7 +178,7 @@ export const useApp = create<AppState>((set, get) => ({
       onStatus: (status) => {
         set({ status });
         if (status === 'unauthorised') {
-          set({ platoon: null, grants: { squad: null, command: null } });
+          set({ platoon: null, grants: { squad: null, command: null, allcall: null } });
           void bridge.signOut();
         }
       },
@@ -159,10 +186,12 @@ export const useApp = create<AppState>((set, get) => ({
     });
 
     set({ settings, hotkeysAvailable: info.hotkeysAvailable, ready: true });
+    setToneOutput(settings.audio.outputDeviceId, settings.audio.outputVolume);
 
     bridge.onSettingsChanged((next) => {
       set({ settings: next });
       engine?.setSettings(next);
+      setToneOutput(next.audio.outputDeviceId, next.audio.outputVolume);
     });
 
     bridge.onSessionToken((token) => {
@@ -198,12 +227,12 @@ export const useApp = create<AppState>((set, get) => ({
 
   async signOut() {
     socket?.disconnect();
-    await engine?.applyGrants({ squad: null, command: null });
+    await engine?.applyGrants({ squad: null, command: null, allcall: null });
     await window.wardogs.signOut();
     set({
       user: null,
       platoon: null,
-      grants: { squad: null, command: null },
+      grants: { squad: null, command: null, allcall: null },
       status: 'offline',
       settings: { ...get().settings, sessionToken: null },
     });
@@ -386,9 +415,9 @@ function handleServerMessage(
       return;
 
     case 'platoon:none':
-      set({ platoon: null, grants: { squad: null, command: null }, remoteTransmit: {} });
+      set({ platoon: null, grants: { squad: null, command: null, allcall: null }, remoteTransmit: {} });
       engine?.setRoster('', new Map());
-      void engine?.applyGrants({ squad: null, command: null });
+      void engine?.applyGrants({ squad: null, command: null, allcall: null });
       return;
 
     case 'player:transmit': {
@@ -484,6 +513,7 @@ function buildOverlayState(state: AppState): OverlayState {
   return {
     connected: state.status === 'online',
     inPlatoon: state.platoon !== null,
+    voiceDown: selectVoiceHealth(state) === 'down',
     transmitting: state.transmitting,
     speakers: badges,
     squadLabel: squad ? `${squad.name} · ${squad.role}` : null,

@@ -10,7 +10,12 @@ export type Binding =
   | { kind: 'mouse'; button: number; label: string };
 
 /** Which net a hotkey keys up. */
-export type HotkeyAction = 'squad' | 'command' | 'muteToggle' | 'deafenToggle';
+export type HotkeyAction =
+  | 'squad'
+  | 'command'
+  | 'allcall'
+  | 'muteToggle'
+  | 'deafenToggle';
 
 /**
  * How a net is keyed.
@@ -77,6 +82,9 @@ export interface Settings {
     hideWhenIdle: boolean;
   };
 
+  /** Start with the operating system, so comms are up before the game is. */
+  launchAtLogin: boolean;
+  /** Start hidden in the tray rather than opening the window. */
   startMinimised: boolean;
 }
 
@@ -106,6 +114,7 @@ export const DEFAULT_SETTINGS: Settings = {
     // game binds, so the UI asks for a key on first run instead.
     squad: null,
     command: null,
+    allcall: null,
     muteToggle: null,
     deafenToggle: null,
   },
@@ -119,6 +128,7 @@ export const DEFAULT_SETTINGS: Settings = {
     scale: 1,
     hideWhenIdle: true,
   },
+  launchAtLogin: false,
   startMinimised: false,
 };
 

@@ -5,7 +5,7 @@ import {
   unassignedPlayers,
   type PlayerState,
 } from '@wardogs/shared';
-import { selectMe, useApp } from '../state/store.js';
+import { selectMe, selectVoiceHealth, useApp } from '../state/store.js';
 import { SquadCard } from './SquadCard.js';
 import { PlayerRow } from './PlayerRow.js';
 import { PlatoonAdminBar } from './PlatoonAdminBar.js';
@@ -21,7 +21,10 @@ export function PlatoonScreen() {
   const commandGrant = useApp((s) => s.grants.command);
   const squadHotkey = useApp((s) => s.settings.hotkeys.squad);
   const commandHotkey = useApp((s) => s.settings.hotkeys.command);
+  const allcallHotkey = useApp((s) => s.settings.hotkeys.allcall);
+  const allcallGrant = useApp((s) => s.grants.allcall);
   const openSettings = useApp((s) => s.openSettings);
+  const voice = useApp(selectVoiceHealth);
 
   const [copied, setCopied] = useState(false);
 
@@ -84,6 +87,14 @@ export function PlatoonScreen() {
         </button>
       </div>
 
+      {voice === 'down' && (
+        <div className="alarm">
+          <strong>Nejsi připojený k hlasovému serveru.</strong> Roster vidíš, ale
+          nikdo tě neslyší a ty neslyšíš nikoho. Zkouším se připojit dál — pokud to
+          nepřestane, je mimo hlasový server, ne ty.
+        </div>
+      )}
+
       {canAdmin && <PlatoonAdminBar platoon={platoon} />}
 
       <section className={`command${commandHot ? ' command--hot' : ''}`}>
@@ -109,6 +120,20 @@ export function PlatoonScreen() {
               canAdmin={false}
             />
           ))
+        )}
+
+        {allcallGrant?.canPublish && (
+          <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-faint)' }}>
+            {allcallHotkey ? (
+              <>
+                Všem najednou: <b style={{ color: 'var(--danger)' }}>{allcallHotkey.label}</b>
+              </>
+            ) : (
+              <button className="btn btn--sm" onClick={() => openSettings(true)}>
+                Nastav klávesu pro all-call
+              </button>
+            )}
+          </div>
         )}
 
         {commandGrant && (

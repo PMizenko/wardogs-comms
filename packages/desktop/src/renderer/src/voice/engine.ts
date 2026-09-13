@@ -53,7 +53,13 @@ interface NetHandle {
   speaking: SpeakingEntry[];
 }
 
-const NETS: NetId[] = ['squad', 'command'];
+const NETS: NetId[] = ['squad', 'command', 'allcall'];
+
+const NET_LABELS: Record<NetId, string> = {
+  squad: 'squad',
+  command: 'velitelský',
+  allcall: 'all-call',
+};
 
 export class VoiceEngine {
   private readonly nets = new Map<NetId, NetHandle>();
@@ -65,7 +71,7 @@ export class VoiceEngine {
   private readonly players = new Map<string, HTMLAudioElement>();
 
   private settings: Settings;
-  private held: Record<NetId, boolean> = { squad: false, command: false };
+  private held: Record<NetId, boolean> = { squad: false, command: false, allcall: false };
   private micMuted = false;
   private deafened = false;
   private transmitting: NetId | null = null;
@@ -97,9 +103,7 @@ export class VoiceEngine {
    */
   async applyGrants(grants: VoiceGrants): Promise<void> {
     if (this.disposed) return;
-    await Promise.all(
-      NETS.map((net) => this.reconcileNet(net, net === 'squad' ? grants.squad : grants.command)),
-    );
+    await Promise.all(NETS.map((net) => this.reconcileNet(net, grants[net])));
     await this.applyTransmitState();
   }
 
@@ -138,7 +142,7 @@ export class VoiceEngine {
       this.nets.delete(net);
       this.events.onNetState(net, 'failed');
       this.events.onError(
-        `Nepodařilo se připojit na ${net === 'command' ? 'velitelský' : 'squad'} kanál: ${
+        `Nepodařilo se připojit na ${NET_LABELS[net]} kanál: ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
@@ -471,22 +475,27 @@ export class VoiceEngine {
    * open mic. Mute and deafen close everything.
    */
   private async applyTransmitState(): Promise<void> {
-    const mode: Record<NetId, TransmitMode> = {
+    // The all-call has no mode of its own - it is push-to-talk, always.
+    const mode: Pick<Record<NetId, TransmitMode>, 'squad' | 'command'> = {
       squad: this.settings.transmit.squad,
       command: this.settings.transmit.command,
     };
 
     let live: NetId | null = null;
     if (!this.micMuted && !this.deafened) {
+      // The all-call is always push-to-talk: an open mic reaching forty people
+      // is not something anyone should be able to leave switched on.
       const commandHeld = this.held.command && mode.command === 'ptt';
       const squadHeld = this.held.squad && mode.squad === 'ptt';
 
-      if (commandHeld) live = 'command';
+      if (this.held.allcall) live = 'allcall';
+      else if (commandHeld) live = 'command';
       else if (squadHeld) live = 'squad';
       else if (mode.command === 'open' && this.nets.has('command')) live = 'command';
       else if (mode.squad === 'open') live = 'squad';
     }
-    if (live && !this.nets.has(live)) live = null;
+    // Holding a key for a net you may only listen on must not read as "on air".
+    if (live && !this.nets.get(live)?.track) live = null;
 
     await Promise.all(
       NETS.map(async (net) => {

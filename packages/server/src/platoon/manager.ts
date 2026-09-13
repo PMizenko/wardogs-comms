@@ -33,6 +33,13 @@ function passwordMatches(record: PasswordRecord, attempt: string): boolean {
   return timingSafeEqual(record.hash, candidate);
 }
 
+/** On-disk shape for surviving a restart. */
+export interface PlatoonSnapshot {
+  savedAt: number;
+  platoons: PlatoonState[];
+  passwords: Array<{ id: string; salt: string; hash: string }>;
+}
+
 export class PlatoonError extends Error {
   constructor(
     readonly code:
@@ -268,14 +275,17 @@ export class PlatoonManager extends EventEmitter {
 
     player.online = false;
     this.changed(platoon);
+    this.armReap(playerId, config.limits.reconnectGraceMs);
+  }
 
+  private armReap(playerId: string, graceMs: number): void {
     this.cancelReap(playerId);
     const timer = setTimeout(() => {
       this.reapTimers.delete(playerId);
       const still = this.platoonOf(playerId);
       const p = still && this.playerIn(still, playerId);
       if (p && !p.online) this.leave(playerId);
-    }, config.limits.reconnectGraceMs);
+    }, graceMs);
     timer.unref?.();
     this.reapTimers.set(playerId, timer);
   }
@@ -493,6 +503,54 @@ export class PlatoonManager extends EventEmitter {
     player.micMuted = micMuted;
     player.deafened = deafened;
     this.changed(platoon);
+  }
+
+  // --- surviving a restart -------------------------------------------------
+
+  /** Everything needed to rebuild the live state, including password hashes. */
+  snapshot(): PlatoonSnapshot {
+    return {
+      savedAt: Date.now(),
+      platoons: [...this.platoons.values()],
+      passwords: [...this.passwords.entries()].map(([id, record]) => ({
+        id,
+        salt: record.salt.toString('base64'),
+        hash: record.hash.toString('base64'),
+      })),
+    };
+  }
+
+  /**
+   * Rebuild from a snapshot. Everyone comes back marked offline with a reap
+   * timer running, so the existing reconnect path does the rest: clients
+   * reconnect on their own within seconds and drop straight back into their
+   * squad and rank. Anyone who does not come back is cleaned up as usual.
+   */
+  restore(snapshot: PlatoonSnapshot): { platoons: number; players: number } {
+    let players = 0;
+
+    for (const platoon of snapshot.platoons) {
+      if (platoon.players.length === 0) continue;
+      this.platoons.set(platoon.id, platoon);
+      this.byCode.set(platoon.code, platoon.id);
+
+      for (const player of platoon.players) {
+        player.online = false;
+        this.membership.set(player.id, platoon.id);
+        this.armReap(player.id, config.limits.restoreGraceMs);
+        players += 1;
+      }
+    }
+
+    for (const entry of snapshot.passwords) {
+      if (!this.platoons.has(entry.id)) continue;
+      this.passwords.set(entry.id, {
+        salt: Buffer.from(entry.salt, 'base64'),
+        hash: Buffer.from(entry.hash, 'base64'),
+      });
+    }
+
+    return { platoons: this.platoons.size, players };
   }
 
   stats(): { platoons: number; players: number } {

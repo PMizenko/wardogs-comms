@@ -1,5 +1,6 @@
 import { AccessToken, TrackSource } from 'livekit-server-sdk';
 import {
+  ALLCALL_CHANNEL,
   COMMAND_CHANNEL,
   roomName,
   type ChannelGrant,
@@ -62,10 +63,13 @@ export async function issueGrants(
 ): Promise<VoiceGrants> {
   const wantsCommand = player.role === 'squad_leader' || player.role === 'platoon_leader';
 
-  const [squad, command] = await Promise.all([
+  const [squad, command, allcall] = await Promise.all([
     player.squadId !== null ? mintGrant(platoonId, player.squadId, player, true) : null,
     wantsCommand ? mintGrant(platoonId, COMMAND_CHANNEL, player, true) : null,
+    // Everybody listens on the all-call; only the platoon leader gets a token
+    // that may publish there, which is what keeps it from becoming a free-for-all.
+    mintGrant(platoonId, ALLCALL_CHANNEL, player, player.role === 'platoon_leader'),
   ]);
 
-  return { squad, command };
+  return { squad, command, allcall };
 }

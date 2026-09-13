@@ -23,8 +23,12 @@ export function Overlay() {
     };
   }, []);
 
-  /** Dropped the control link while in a platoon - comms are effectively dead. */
-  const lostComms = state.inPlatoon && !state.connected;
+  /**
+   * Comms are effectively dead - either the control link dropped or the media
+   * path is down. Both mean nobody can hear you, which is the one thing the HUD
+   * must never let you find out the hard way.
+   */
+  const lostComms = state.inPlatoon && (!state.connected || state.voiceDown);
   /**
    * "Hide when idle" must never hide a problem. Silence is the normal case and
    * worth hiding; a muted mic or a dropped link is exactly what you need to see
@@ -39,7 +43,12 @@ export function Overlay() {
 
   if (settings.overlay.hideWhenIdle && quiet) return null;
 
-  const transmitColor = state.transmitting === 'command' ? '#e0b13a' : state.squadColor;
+  const transmitColor =
+    state.transmitting === 'allcall'
+      ? '#ef4444'
+      : state.transmitting === 'command'
+        ? '#e0b13a'
+        : state.squadColor;
   const showSquad = state.squadLabel && (!settings.overlay.hideWhenIdle || !!state.transmitting);
 
   return (
@@ -47,7 +56,11 @@ export function Overlay() {
       {state.transmitting && (
         <div className="hud__onair" style={{ background: transmitColor }}>
           <span className="hud__pulse" />
-          {state.transmitting === 'command' ? 'COMMAND' : 'SQUAD'}
+          {state.transmitting === 'allcall'
+            ? 'VŠEM'
+            : state.transmitting === 'command'
+              ? 'COMMAND'
+              : 'SQUAD'}
         </div>
       )}
 
@@ -59,7 +72,11 @@ export function Overlay() {
         </div>
       )}
 
-      {lostComms && <div className="hud__warn hud__warn--red">BEZ SPOJENÍ</div>}
+      {lostComms && (
+        <div className="hud__warn hud__warn--red">
+          {state.connected ? 'HLAS NEJEDE' : 'BEZ SPOJENÍ'}
+        </div>
+      )}
 
       {(state.micMuted || state.deafened) && (
         <div className="hud__warn">{state.deafened ? 'ZVUK VYPNUT' : 'MIKROFON VYPNUT'}</div>

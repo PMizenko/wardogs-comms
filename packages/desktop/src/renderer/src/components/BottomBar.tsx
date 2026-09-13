@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { COMMAND_COLOR } from '@wardogs/shared';
-import { selectMe, useApp } from '../state/store.js';
+import { selectMe, selectVoiceHealth, useApp } from '../state/store.js';
 import {
   HeadsetIcon,
   HeadsetOffIcon,
@@ -33,6 +33,8 @@ export function BottomBar() {
   const squadMode = useApp((s) => s.settings.transmit.squad);
   const toggleSquadPtt = useApp((s) => s.toggleSquadPtt);
 
+  const voice = useApp(selectVoiceHealth);
+
   const openMic = squadMode === 'open';
   const squadKey = hotkeys.squad;
 
@@ -40,17 +42,33 @@ export function BottomBar() {
   const squadColor = squad?.color ?? COMMAND_COLOR;
 
   const live = transmitting !== null;
-  const accent = transmitting === 'command' ? 'var(--gold)' : squadColor;
+  // Red for the all-call: it reaches everybody, and it should look like it.
+  const accent =
+    transmitting === 'allcall'
+      ? 'var(--danger)'
+      : transmitting === 'command'
+        ? 'var(--gold)'
+        : squadColor;
 
-  const onAirLabel = live
-    ? transmitting === 'command'
-      ? 'Vysíláš — COMMAND'
-      : `Vysíláš — ${squad?.name ?? 'SQUAD'}`
-    : micMuted
-      ? 'Mikrofon vypnut'
-      : hotkeys.squad || hotkeys.command
-        ? 'Připraven'
-        : 'Klávesa nenastavena';
+  // Voice trouble outranks everything else this readout could say: being told
+  // you are "ready" while the media path is down is how you end up talking to
+  // nobody for a whole firefight.
+  const onAirLabel =
+    voice === 'down'
+      ? 'HLAS NEJEDE'
+      : voice === 'connecting'
+        ? 'Připojuji hlas…'
+        : live
+          ? transmitting === 'allcall'
+            ? 'Vysíláš — VŠEM'
+            : transmitting === 'command'
+              ? 'Vysíláš — COMMAND'
+              : `Vysíláš — ${squad?.name ?? 'SQUAD'}`
+          : micMuted
+            ? 'Mikrofon vypnut'
+            : hotkeys.squad || hotkeys.command
+              ? 'Připraven'
+              : 'Klávesa nenastavena';
 
   const statusClass =
     status === 'online' ? 'online' : status === 'connecting' ? 'connecting' : 'offline';
@@ -78,8 +96,13 @@ export function BottomBar() {
       <div className="bottombar__spacer" />
 
       <div
-        className={`onair${live ? ' onair--live' : ''}`}
-        style={live ? ({ '--accent': accent } as CSSProperties) : undefined}
+        className={`onair${live ? ' onair--live' : ''}${voice === 'down' ? ' onair--down' : ''}`}
+        style={live && voice !== 'down' ? ({ '--accent': accent } as CSSProperties) : undefined}
+        title={
+          voice === 'down'
+            ? 'Nepřipojeno k hlasovému serveru — nikdo tě neslyší.'
+            : undefined
+        }
       >
         <span className="dot" />
         {onAirLabel}

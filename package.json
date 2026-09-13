@@ -24,7 +24,8 @@
     "check:livekit": "node scripts/check-livekit.mjs",
     "dist:release": "node scripts/release.mjs",
     "test:ducking": "node --experimental-strip-types scripts/test-ducking.mjs",
-    "publish:release": "node scripts/publish.mjs"
+    "publish:release": "node scripts/publish.mjs",
+    "test:resilience": "node scripts/test-resilience.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

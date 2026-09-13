@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { HotkeyAction, OverlayCorner, TransmitMode } from '../../../common/settings.js';
 import type { UpdateState } from '../../../common/ipc.js';
 import { useApp } from '../state/store.js';
+import { MicCheck } from '../voice/miccheck.js';
 import { XIcon } from './Icons.js';
 
 function Switch({ on, onChange }: { on: boolean; onChange: (next: boolean) => void }) {
@@ -65,6 +66,10 @@ const HOTKEY_LABELS: Record<HotkeyAction, { title: string; hint: string }> = {
   command: {
     title: 'Command — push-to-talk',
     hint: 'Jen pro velitele squadů. Má přednost před squad kanálem.',
+  },
+  allcall: {
+    title: 'All-call — push-to-talk',
+    hint: 'Jen velitel platoonu. Mluví do všech čtyř squadů najednou a přebije všechno ostatní.',
   },
   muteToggle: { title: 'Přepnout mikrofon', hint: 'Rychlé ztlumení sebe sama.' },
   deafenToggle: { title: 'Přepnout zvuk', hint: 'Ztlumí i poslech.' },
@@ -162,6 +167,103 @@ function ServerSetting() {
         OK
       </button>
     </div>
+  );
+}
+
+/**
+ * Live input level plus optional self-monitoring.
+ *
+ * Runs only while the panel is open - holding a second microphone capture in
+ * the background for a meter nobody is looking at would be rude.
+ */
+function MicTest() {
+  const settings = useApp((s) => s.settings);
+  const [level, setLevel] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [monitoring, setMonitoring] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [check] = useState(() => new MicCheck());
+
+  // Tear down on close, and whenever the chosen device or processing changes -
+  // the meter has to reflect what is actually configured.
+  useEffect(() => {
+    return () => check.stop();
+  }, [check]);
+
+  useEffect(() => {
+    if (!running) return;
+    let cancelled = false;
+    void check.start(settings, (value) => !cancelled && setLevel(value)).then((err) => {
+      if (cancelled) return;
+      setError(err);
+      if (err) setRunning(false);
+    });
+    return () => {
+      cancelled = true;
+      check.stop();
+      setMonitoring(false);
+    };
+  }, [
+    running,
+    check,
+    settings.audio.inputDeviceId,
+    settings.audio.noiseSuppression,
+    settings.audio.echoCancellation,
+    settings.audio.autoGainControl,
+  ]);
+
+  const percent = Math.round(level * 100);
+
+  return (
+    <>
+      <Setting
+        title="Test mikrofonu"
+        hint={
+          error
+            ? `Mikrofon se nepodařilo otevřít: ${error}`
+            : running
+              ? 'Mluv — pruh se má hýbat.'
+              : 'Zkontroluj, že máš vybrané správné zařízení.'
+        }
+      >
+        <button
+          className={`btn btn--sm${running ? '' : ' btn--primary'}`}
+          style={{ flex: 'none' }}
+          onClick={() => {
+            setError(null);
+            setRunning((v) => !v);
+          }}
+        >
+          {running ? 'Zastavit' : 'Spustit test'}
+        </button>
+      </Setting>
+
+      {running && (
+        <>
+          <div className="meter" aria-label={`Hlasitost vstupu ${percent} %`}>
+            <div className="meter__fill" style={{ width: `${percent}%` }} />
+            {/* Anything past here is clipping rather than loud. */}
+            <span className="meter__peak" />
+          </div>
+          <Setting
+            title="Poslouchat sebe"
+            hint="Jen ve sluchátkách — na reproduktorech si vyrobíš zpětnou vazbu."
+          >
+            <Switch
+              on={monitoring}
+              onChange={(on) => {
+                setMonitoring(on);
+                void check.setMonitor(
+                  on,
+                  settings.audio.outputDeviceId,
+                  settings.audio.outputVolume,
+                );
+              }}
+            />
+          </Setting>
+        </>
+      )}
+    </>
   );
 }
 
@@ -419,6 +521,8 @@ export function SettingsDrawer() {
               </select>
             </Setting>
 
+            <MicTest />
+
             <Setting title="Hlasitost poslechu">
               <input
                 className="range"
@@ -459,6 +563,16 @@ export function SettingsDrawer() {
                 />
               </Setting>
             )}
+
+            <Setting
+              title="Zvuk při otevření kanálu"
+              hint="Krátké cvaknutí, když začneš a přestaneš vysílat — poznáš, že jsi ve vzduchu, bez koukání."
+            >
+              <Switch
+                on={audio.keyTones}
+                onChange={(on) => void patch({ audio: { keyTones: on } })}
+              />
+            </Setting>
 
             <Setting title="Potlačení šumu" hint="Ticho mezi větami, ale ukousne tiché hlasy.">
               <Switch
@@ -519,6 +633,28 @@ export function SettingsDrawer() {
               <Switch
                 on={overlay.hideWhenIdle}
                 onChange={(on) => void patch({ overlay: { hideWhenIdle: on } })}
+              />
+            </Setting>
+          </section>
+
+          <section>
+            <h3 className="section__title">Spouštění</h3>
+            <Setting
+              title="Spouštět s Windows"
+              hint="Komunikace je nahoře dřív než hra."
+            >
+              <Switch
+                on={settings.launchAtLogin}
+                onChange={(on) => void patch({ launchAtLogin: on })}
+              />
+            </Setting>
+            <Setting
+              title="Startovat do lišty"
+              hint="Okno se neotevře, aplikace jen sedí u hodin."
+            >
+              <Switch
+                on={settings.startMinimised}
+                onChange={(on) => void patch({ startMinimised: on })}
               />
             </Setting>
           </section>

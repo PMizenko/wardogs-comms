@@ -1,7 +1,10 @@
 import type { Binding, HotkeyAction, Settings } from './settings.js';
 
-/** Nets as the client thinks of them: your squad net and the command net. */
-export type NetId = 'squad' | 'command';
+/**
+ * Nets as the client thinks of them: your squad, the command net, and the
+ * all-call the platoon leader can key to reach everybody at once.
+ */
+export type NetId = 'squad' | 'command' | 'allcall';
 
 /** One person currently audible, and on which net. */
 export interface SpeakerBadge {
@@ -20,6 +23,8 @@ export interface OverlayState {
   connected: boolean;
   /** True once in a platoon - a lost link only matters when you were on one. */
   inPlatoon: boolean;
+  /** Media path is down: the roster still works but nobody can hear you. */
+  voiceDown: boolean;
   /** Net this player is transmitting on right now, if any. */
   transmitting: NetId | null;
   speakers: SpeakerBadge[];
@@ -35,6 +40,7 @@ export interface OverlayState {
 export const EMPTY_OVERLAY_STATE: OverlayState = {
   connected: false,
   inPlatoon: false,
+  voiceDown: false,
   transmitting: null,
   speakers: [],
   squadLabel: null,

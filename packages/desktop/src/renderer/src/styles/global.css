@@ -980,6 +980,27 @@ select {
   transition: all 0.1s;
 }
 
+.onair--down {
+  background: #3a1113;
+  border-color: #7a2226;
+  color: #ff9a9a;
+}
+
+.alarm {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #7a2226;
+  border-left: 3px solid var(--danger);
+  background: #241315;
+  color: #f0bcbc;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.alarm strong {
+  color: #ffd2d2;
+}
+
 .onair--live {
   --accent: var(--gold);
   color: #14151a;
@@ -1194,6 +1215,33 @@ select {
 .seg button[data-on='true'] {
   background: var(--gold);
   color: #14151a;
+}
+
+/* Input level meter for the microphone test. */
+.meter {
+  position: relative;
+  height: 8px;
+  margin: 4px 0 10px;
+  border-radius: 4px;
+  background: var(--panel-3);
+  overflow: hidden;
+}
+
+.meter__fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--ok) 0%, var(--ok) 55%, var(--gold) 78%, var(--danger) 100%);
+  transition: width 0.06s linear;
+}
+
+/* Where speech should be peaking; past it you are clipping, not loud. */
+.meter__peak {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 78%;
+  width: 1px;
+  background: rgb(255 255 255 / 22%);
 }
 
 .range {

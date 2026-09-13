@@ -55,6 +55,7 @@ export type ServerErrorCode =
   | 'not_in_platoon'
   | 'forbidden'
   | 'bad_password'
+  | 'rate_limited'
   | 'bad_request'
   | 'internal';
 

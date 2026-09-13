@@ -6,6 +6,7 @@ import { registerDiscordAuth } from './auth/discord.js';
 import { registerDevAuth } from './auth/dev.js';
 import { registerGateway, connectedPlayers } from './ws/gateway.js';
 import { platoons } from './platoon/manager.js';
+import { loadState, saveState } from './platoon/persistence.js';
 
 /**
  * Wardogs VOIP control server.
@@ -29,6 +30,9 @@ async function main(): Promise<void> {
   await app.register(websocket, {
     options: { maxPayload: 64 * 1024 },
   });
+
+  // Before anything can connect, so reconnecting clients find their slots.
+  loadState((message) => app.log.info(message));
 
   await registerDiscordAuth(app);
   await registerDevAuth(app);
@@ -63,15 +67,28 @@ async function main(): Promise<void> {
     ),
   );
 
+  // Park the roster periodically, so an unclean exit still has something recent
+  // to come back to. Registered before listen(): Fastify refuses new hooks once
+  // the server is up.
+  const autosave = setInterval(() => saveState(() => undefined), config.stateSaveIntervalMs);
+  autosave.unref?.();
+  app.addHook('onClose', async () => clearInterval(autosave));
+
   await app.listen({ port: config.port, host: '0.0.0.0' });
   app.log.info(
     { publicUrl: config.publicUrl, livekit: config.livekit.url },
     'wardogs voip control server ready',
   );
 
+  let shuttingDown = false;
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
       app.log.info(`${signal} received, shutting down`);
+      // Park the roster first: if closing the server hangs, the snapshot is
+      // already on disk and the restart still restores everyone.
+      saveState((message) => app.log.info(message));
       void app.close().then(() => process.exit(0));
     });
   }

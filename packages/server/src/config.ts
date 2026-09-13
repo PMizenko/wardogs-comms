@@ -84,7 +84,27 @@ export const config = {
     platoonSize: 40,
     /** How long a dropped player keeps their slot before being reaped. */
     reconnectGraceMs: 45_000,
+    /**
+     * The same grace, but for players restored from a snapshot after a restart.
+     * Longer, because a deploy plus the client's reconnect backoff eats more
+     * than a dropped wifi does.
+     */
+    restoreGraceMs: 180_000,
   },
+
+  /**
+   * Where live platoons are parked across a restart. Without this every deploy
+   * ends whatever match is in progress.
+   */
+  stateFile: optional('STATE_FILE', 'data/platoons.json'),
+  /** A snapshot older than this is stale; nobody wants last night's platoon. */
+  stateMaxAgeMs: 15 * 60_000,
+  /**
+   * How often the roster is parked while running. A clean shutdown saves too,
+   * but a crash or a `kill -9` gets no chance to - and on Windows a terminated
+   * process never sees the signal at all.
+   */
+  stateSaveIntervalMs: Number(optional('STATE_SAVE_INTERVAL_MS', '30000')),
 } as const;
 
 export type Config = typeof config;

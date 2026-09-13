@@ -27,6 +27,26 @@ let tray: Tray | null = null;
 /** Set by the tray/menu "Quit" so closing the window can mean "hide" otherwise. */
 let quitting = false;
 
+/**
+ * Keep the OS login item in step with the setting.
+ *
+ * Only for packaged builds: doing this in development would register the bare
+ * Electron binary, which then starts something meaningless on every login.
+ */
+function syncLoginItem(): void {
+  if (!app.isPackaged || process.platform === 'linux') return;
+  const { launchAtLogin, startMinimised } = settings.get();
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: launchAtLogin,
+      // Launching straight into the tray is the point of starting with Windows.
+      args: startMinimised ? ['--hidden'] : [],
+    });
+  } catch (err) {
+    console.error('[wardogs] could not update the login item:', err);
+  }
+}
+
 function resourcePath(file: string): string {
   return app.isPackaged
     ? join(process.resourcesPath, file)
@@ -54,7 +74,8 @@ function createMainWindow(): BrowserWindow {
   });
 
   window.on('ready-to-show', () => {
-    if (!settings.get().startMinimised) window.show();
+    const hidden = settings.get().startMinimised || process.argv.includes('--hidden');
+    if (!hidden) window.show();
   });
 
   window.on('close', (event) => {
@@ -132,6 +153,7 @@ function wireIpc(): void {
   ipcMain.handle(IPC.settingsUpdate, (_event, patch) => {
     const next = settings.update(patch ?? {});
     applyOverlaySettings();
+    syncLoginItem();
     return next;
   });
 
@@ -215,6 +237,7 @@ if (!gotLock) {
     });
 
     wireIpc();
+    syncLoginItem();
     mainWindow = createMainWindow();
     createTray();
     if (settings.get().overlay.enabled) createOverlay();

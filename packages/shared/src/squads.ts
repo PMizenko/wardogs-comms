@@ -13,8 +13,18 @@ export type SquadId = (typeof SQUAD_IDS)[number];
 
 export const COMMAND_CHANNEL = 'command' as const;
 
-/** A channel is either one of the four squad nets or the command net. */
-export type ChannelId = SquadId | typeof COMMAND_CHANNEL;
+/**
+ * The all-call net: the platoon leader talking to everybody at once.
+ *
+ * It exists because "everyone regroup" otherwise has to be relayed by four
+ * squad leaders in turn, and by the time the fourth has said it the situation
+ * has moved. Everyone subscribes; only the platoon leader may transmit, which
+ * is enforced by who gets a publishing token.
+ */
+export const ALLCALL_CHANNEL = 'allcall' as const;
+
+/** A channel is one of the four squad nets, the command net, or the all-call. */
+export type ChannelId = SquadId | typeof COMMAND_CHANNEL | typeof ALLCALL_CHANNEL;
 
 export interface SquadDefinition {
   id: SquadId;
@@ -45,7 +55,7 @@ export function isSquadId(value: unknown): value is SquadId {
  * concurrent platoons never share a voice bus.
  */
 export function roomName(platoonId: string, channel: ChannelId): string {
-  return channel === COMMAND_CHANNEL
-    ? `wd_${platoonId}_command`
-    : `wd_${platoonId}_squad${channel}`;
+  if (channel === COMMAND_CHANNEL) return `wd_${platoonId}_command`;
+  if (channel === ALLCALL_CHANNEL) return `wd_${platoonId}_allcall`;
+  return `wd_${platoonId}_squad${channel}`;
 }

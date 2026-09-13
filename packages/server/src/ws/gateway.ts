@@ -26,9 +26,51 @@ interface Connection {
   grantKey: string;
   grants: VoiceGrants;
   alive: boolean;
+  /** Rate-limit bucket: remaining tokens and when they were last topped up. */
+  bucket: number;
+  bucketAt: number;
+  refusals: number;
 }
 
 const connections = new Map<string, Connection>();
+
+/**
+ * Per-connection token bucket.
+ *
+ * A signed-in client can otherwise hold the socket open and hammer it; opening
+ * platoons in a loop is the cheapest way to chew through server memory. The
+ * bucket is generous enough that no honest client will ever see it - normal
+ * traffic is a ping every 25s and a handful of roster actions per match.
+ */
+const BUCKET_CAPACITY = 40;
+const BUCKET_REFILL_PER_SEC = 12;
+
+/** What each action costs. Anything unlisted costs one. */
+const MESSAGE_COST: Partial<Record<ClientMessage['t'], number>> = {
+  'platoon:create': 12,
+  'platoon:join': 5,
+  'platoon:list': 4,
+  'admin:password': 4,
+};
+
+/** Consecutive refusals before the socket is simply shown the door. */
+const ABUSE_LIMIT = 20;
+
+function affordable(conn: Connection, message: ClientMessage): boolean {
+  const now = Date.now();
+  const elapsed = (now - conn.bucketAt) / 1000;
+  conn.bucket = Math.min(BUCKET_CAPACITY, conn.bucket + elapsed * BUCKET_REFILL_PER_SEC);
+  conn.bucketAt = now;
+
+  const cost = MESSAGE_COST[message.t] ?? 1;
+  if (conn.bucket < cost) {
+    conn.refusals += 1;
+    return false;
+  }
+  conn.bucket -= cost;
+  conn.refusals = 0;
+  return true;
+}
 
 function send(socket: WebSocket, message: ServerMessage): void {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
@@ -47,14 +89,15 @@ function grantKeyFor(platoon: PlatoonState, playerId: string): string {
   const player = platoon.players.find((p) => p.id === playerId);
   if (!player) return 'none';
   const command = player.role === 'squad_leader' || player.role === 'platoon_leader';
-  return `${platoon.id}:${player.squadId ?? '-'}:${command ? 'cmd' : '-'}`;
+  const allcall = player.role === 'platoon_leader' ? 'ac+' : 'ac-';
+  return `${platoon.id}:${player.squadId ?? '-'}:${command ? 'cmd' : '-'}:${allcall}`;
 }
 
 async function pushState(conn: Connection, platoon: PlatoonState): Promise<void> {
   const player = platoon.players.find((p) => p.id === conn.user.id);
   if (!player) {
     conn.grantKey = 'none';
-    conn.grants = { squad: null, command: null };
+    conn.grants = { squad: null, command: null, allcall: null };
     send(conn.socket, { t: 'platoon:none' });
     return;
   }
@@ -232,8 +275,11 @@ export async function registerGateway(app: FastifyInstance): Promise<void> {
         socket,
         user,
         grantKey: 'none',
-        grants: { squad: null, command: null },
+        grants: { squad: null, command: null, allcall: null },
         alive: true,
+        bucket: BUCKET_CAPACITY,
+        bucketAt: Date.now(),
+        refusals: 0,
       };
       connections.set(user.id, conn);
 
@@ -253,6 +299,18 @@ export async function registerGateway(app: FastifyInstance): Promise<void> {
         const msg = parseClientMessage(raw.toString());
         if (!msg) {
           send(socket, { t: 'error', code: 'bad_request', message: 'Malformed message' });
+          return;
+        }
+        if (!affordable(conn, msg)) {
+          send(socket, {
+            t: 'error',
+            code: 'rate_limited',
+            message: 'Too many requests - slow down',
+          });
+          if (conn.refusals >= ABUSE_LIMIT) {
+            app.log.warn({ userId: user.id }, 'closing socket for sustained flooding');
+            socket.close(4429, 'rate_limited');
+          }
           return;
         }
         handleMessage(conn, msg).catch((err) => {

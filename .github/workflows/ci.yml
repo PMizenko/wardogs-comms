@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push makes the running one pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # The desktop build only needs the packages, not the Electron binary, and
+      # skipping it saves ~100 MB of download on every run.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build shared types
+        run: npm run build:shared
+
+      - name: Typecheck every package
+        run: npm run typecheck
+
+      - name: Priority ducking decision table
+        run: npm run test:ducking
+
+      - name: Build server
+        run: npm run build -w @wardogs/server
+
+      - name: Control plane smoke test
+        # The real value of this job: 55 checks over the permission model,
+        # including decoding the issued LiveKit tokens to prove a member is
+        # never handed the command room. LiveKit itself is not needed - the
+        # server signs those tokens locally.
+        env:
+          NODE_ENV: development
+          PORT: '4000'
+          PUBLIC_URL: http://localhost:4000
+          ALLOW_DEV_LOGIN: 'true'
+          JWT_SECRET: ci-only-secret-0123456789abcdef0123456789abcdef
+          LIVEKIT_URL: ws://localhost:7880
+          LIVEKIT_API_KEY: devkey
+          LIVEKIT_API_SECRET: devsecretdevsecretdevsecretdevsecret
+        run: |
+          node packages/server/dist/index.js &
+          SERVER_PID=$!
+          # The test waits for the server itself, so just make sure it did not
+          # die on startup before handing over.
+          sleep 2
+          if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+            echo "control server exited during startup"
+            exit 1
+          fi
+          npm run smoke
+          STATUS=$?
+          kill "$SERVER_PID" 2>/dev/null || true
+          exit $STATUS
+
+      - name: Restart survival and rate limiting
+        # Owns its own server on a spare port: starts one, kills it mid-match
+        # the way a crash would, and checks everyone's squad and rank came back.
+        run: npm run test:resilience
+
+      - name: Build desktop bundles
+        run: npm run build -w @wardogs/desktop

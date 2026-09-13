@@ -231,6 +231,29 @@ async function main() {
   const denied = await charlie.waitFor((m) => m.t === 'error', 'leader_taken error');
   check('a taken leader slot cannot be stolen', denied.code === 'leader_taken', denied.code);
 
+  section('All-call');
+  // Everyone hears it; only the platoon leader may key it. That split is the
+  // whole guarantee, and it lives in which token can publish.
+  check('the platoon leader holds an all-call grant', state.grants.allcall !== null);
+  check(
+    'the all-call room is namespaced to this platoon',
+    decodeGrant(state.grants.allcall.token).room === `wd_${platoonId}_allcall`,
+    state.grants.allcall.room,
+  );
+  check(
+    'a member is on the all-call as a listener',
+    state.grants.allcall.canPublish === false,
+    `canPublish=${state.grants.allcall.canPublish}`,
+  );
+
+  const leaderState = await alpha.waitForState(() => true, 'alpha state');
+  check('only the platoon leader may transmit on it', leaderState.grants.allcall?.canPublish === true);
+  check(
+    'the leader publishes into the same room everyone is listening on',
+    decodeGrant(leaderState.grants.allcall.token).room ===
+      decodeGrant(state.grants.allcall.token).room,
+  );
+
   section('A second squad');
   delta.clear();
   delta.send({ t: 'platoon:join', code });

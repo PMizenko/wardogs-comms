@@ -48,7 +48,7 @@ dostat — ani upraveným klientem. Když velitele degraduješ, server mu při d
 změně rosteru vystaví nové tokeny bez command místnosti a klient to spojení
 zahodí.
 
-Ověřeno testem: `npm run smoke` projede 55 kontrol včetně dekódování těch JWT.
+Ověřeno testem: `npm run smoke` projede 60 kontrol včetně dekódování těch JWT.
 
 ### Vysílání je exkluzivní
 
@@ -106,6 +106,31 @@ až při vstupu.
 
 Seznam **nikdy nenese join kód ani roster** — jinak by zámek nedával smysl.
 Připojuje se přes id platoonu, ne přes kód.
+
+### All-call — velitel platoonu na všechny
+
+Velitel platoonu má vlastní klávesu, kterou mluví do **všech čtyř squadů
+najednou**. Bez toho musí „všichni ke mně" přeposlat čtyři velitelé squadů a než
+to udělají, je situace jinde.
+
+Je to vždycky push-to-talk a přebíjí všechno ostatní. Kdo smí mluvit, hlídá
+token: všichni na tom kanálu poslouchají, ale publikovat může jen velitel
+platoonu.
+
+### Když hlas nejede, je to vidět
+
+Řídicí spojení a hlas jsou dvě různé věci. Může ti fungovat roster a přitom
+neprojít zvuk — a to je nejhorší možný stav, protože aplikace vypadá připojeně.
+
+Proto se to hlásí nahlas: červený pruh přes celou obrazovku, pilulka dole říká
+**HLAS NEJEDE** místo „Připraven", a overlay ve hře taky. Nikdy se nedozvíš až
+podle toho, že ti nikdo neodpovídá.
+
+### Test mikrofonu
+
+V *Nastavení → Zvuk* je **Spustit test**: ukazatel hlasitosti a možnost
+poslechnout si sebe. Vyřeší to „slyšíte mě?" dřív, než se někdo připojí ke
+squadu — skoro vždycky je to špatně vybrané vstupní zařízení.
 
 ---
 
@@ -353,7 +378,8 @@ scripts/
 | --- | --- |
 | `npm run dev` | Server i klient najednou |
 | `npm run livekit` | LiveKit SFU v Dockeru |
-| `npm run smoke` | 55 kontrol řídicího toku (server musí běžet) |
+| `npm run smoke` | 60 kontrol řídicího toku (server musí běžet) |
+| `npm run test:resilience` | Přežití restartu a rate limiting (server si spustí sám) |
 | `npm run dev:platoon` | Vytvoří platoon s 10 hráči a drží ho |
 | `npm run check:livekit` | Diagnostika hlasové části |
 | `npm run typecheck` | Typová kontrola všech balíčků |
@@ -366,8 +392,11 @@ scripts/
 
 ## Provozní poznámky
 
-- **Platoon žije v paměti.** Restart serveru znamená, že si lidi znovu zadají
-  kód. Zápas trvá půl hodiny, databáze by tu byla navíc.
+- **Platoon přežije restart serveru.** Stav se průběžně ukládá na disk a po
+  startu se obnoví; klienti se sami připojí zpátky do svých squadů a hodností.
+  Snapshot starší než 15 minut se zahodí — nikdo nechce včerejší platoon.
+- **Server se brání zahlcení.** Každé spojení má svůj rozpočet požadavků;
+  zakládání platoonů v cyklu narazí dřív, než něco sežere.
 - **Výpadek spojení nestojí místo.** Server drží slot 45 sekund, takže pád hry
   do desktopu neznamená, že o velení přijdeš.
 - **Velikosti:** 9 lidí na squad, 40 na platoon. Změníš v `packages/server/src/config.ts`.
