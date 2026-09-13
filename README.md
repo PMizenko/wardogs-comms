@@ -22,6 +22,10 @@ svému squadu na druhé klávese.
         └───────────┘ └───────────┘ └───────────┘ └───────────┘
 ```
 
+**[Stáhnout nejnovější verzi](https://github.com/PMizenko/wardogs-comms/releases/latest)**
+— `WardogsVOIP-Setup-*.exe` je instalátor, `WardogsVOIP-Portable-*.exe` běží bez
+instalace. Aplikace se pak aktualizuje sama.
+
 ![Obrazovka platoonu](docs/screenshots/platoon.png)
 
 ---
@@ -247,9 +251,14 @@ privátního by každý klient potřeboval GitHub token.
 
 ### Kam soubory dát
 
-Cokoli, odkud se dá stáhnout přes odkaz — GitHub Releases, váš web, Discord
-kanál (pozor, Discord má limit 25 MB na přílohu, takže tam patří odkaz, ne
-soubor).
+Release visí na GitHubu, takže lidem stačí poslat odkaz:
+
+```
+https://github.com/PMizenko/wardogs-comms/releases/latest
+```
+
+Ten odkaz vždycky ukazuje na poslední verzi, takže ho nemusíš po každém vydání
+měnit. Do Discordu patří odkaz, ne soubor — příloha má limit 25 MB.
 
 ### macOS a Linux
 
