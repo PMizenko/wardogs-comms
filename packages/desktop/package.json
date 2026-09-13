@@ -1,6 +1,6 @@
 {
   "name": "@wardogs/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "productName": "Wardogs VOIP",
   "private": true,
   "description": "Platoon-style VOIP pro Wardogs - squad kanaly a velitelsky kanal",
