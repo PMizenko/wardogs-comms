@@ -8,8 +8,28 @@
  * the single place to change if a platoon ever grows a fifth squad.
  */
 
-export const SQUAD_IDS = [1, 2, 3, 4] as const;
-export type SquadId = (typeof SQUAD_IDS)[number];
+/**
+ * Squads are numbered from one and created on demand, so this is a plain
+ * number rather than a literal union. Which ids actually exist is a property
+ * of a given platoon, not of the type - checked with `hasSquad`.
+ */
+export type SquadId = number;
+
+export const MIN_SQUADS = 1;
+/** Two rows of four on the widest layout; past that the cards stop being readable. */
+export const MAX_SQUADS = 8;
+
+/** Colours handed to new squads, in order, skipping ones already in use. */
+export const SQUAD_PALETTE = [
+  '#ef4444',
+  '#3b82f6',
+  '#22c55e',
+  '#a855f7',
+  '#f97316',
+  '#06b6d4',
+  '#ec4899',
+  '#84cc16',
+] as const;
 
 export const COMMAND_CHANNEL = 'command' as const;
 
@@ -46,8 +66,9 @@ export const DEFAULT_SQUADS: readonly SquadDefinition[] = [
 
 export const COMMAND_COLOR = '#e0b13a';
 
+/** Shape check only; whether the platoon has this squad is a separate question. */
 export function isSquadId(value: unknown): value is SquadId {
-  return typeof value === 'number' && (SQUAD_IDS as readonly number[]).includes(value);
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 99;
 }
 
 /**

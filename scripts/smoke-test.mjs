@@ -389,6 +389,102 @@ async function main() {
   const notLeader = await foxtrot.waitFor((m) => m.t === 'error', 'forbidden');
   check('only the platoon leader may resize', notLeader.code === 'forbidden', notLeader.code);
 
+  section('Opening and closing squad channels');
+  const kilo = await new Client('Kilo').signIn();
+  const lima = await new Client('Lima').signIn();
+  await Promise.all([kilo.connect(), lima.connect()]);
+
+  kilo.clear();
+  kilo.send({ t: 'platoon:create', name: 'Squads Test' });
+  let sq = await kilo.waitForState(() => true, 'squads platoon');
+  const sqCode = sq.platoon.code;
+  check('a platoon starts with four squads', sq.platoon.squads.length === 4);
+
+  kilo.clear();
+  kilo.send({ t: 'admin:squad-add' });
+  sq = await kilo.waitForState((m) => m.platoon.squads.length === 5, 'fifth squad');
+  const fifth = sq.platoon.squads.find((s) => s.id === 5);
+  check('the leader can open another squad', fifth !== undefined);
+  check(
+    'the new squad gets a colour nobody else has',
+    new Set(sq.platoon.squads.map((s) => s.color)).size === sq.platoon.squads.length,
+  );
+
+  // Someone actually uses it, so closing it has consequences to check.
+  lima.clear();
+  lima.send({ t: 'platoon:join', code: sqCode });
+  await lima.waitForState(() => true, 'lima joined');
+  lima.clear();
+  lima.send({ t: 'squad:join', squadId: 5, asLeader: true });
+  const inFifth = await lima.waitForState((m) => lima.me(m).squadId === 5, 'lima in squad 5');
+  check('players can join a squad that was just opened', lima.me(inFifth).squadId === 5);
+  check('and lead it', lima.me(inFifth).role === 'squad_leader');
+  check(
+    'its voice room follows the new id',
+    decodeGrant(inFifth.grants.squad.token).room === `wd_${inFifth.platoon.id}_squad5`,
+  );
+
+  lima.clear();
+  kilo.send({ t: 'admin:squad-remove', squadId: 5 });
+  const afterRemove = await lima.waitForState(
+    (m) => m.platoon.squads.length === 4,
+    'fifth squad closed',
+  );
+  check('the leader can close a squad', afterRemove.platoon.squads.length === 4);
+  check('anyone standing in it lands on the bench', lima.me(afterRemove).squadId === null);
+  check('they are not thrown out of the platoon', lima.me(afterRemove) !== undefined);
+  check('its squad leader loses the rank', lima.me(afterRemove).role === 'member');
+  check('and the command net with it', afterRemove.grants.command === null);
+  check('and the squad room', afterRemove.grants.squad === null);
+
+  lima.clear();
+  lima.send({ t: 'squad:join', squadId: 5, asLeader: false });
+  const goneSquad = await lima.waitFor((m) => m.t === 'error', 'unknown squad');
+  check('a closed squad cannot be joined', goneSquad.code === 'bad_request', goneSquad.code);
+
+  // Ids are reused once free, so the rooms stay predictable.
+  kilo.clear();
+  kilo.send({ t: 'admin:squad-remove', squadId: 2 });
+  await kilo.waitForState((m) => !m.platoon.squads.some((s) => s.id === 2), 'squad 2 closed');
+  kilo.clear();
+  kilo.send({ t: 'admin:squad-add' });
+  const reused = await kilo.waitForState(
+    (m) => m.platoon.squads.some((s) => s.id === 2),
+    'id 2 reused',
+  );
+  check('a freed id is handed to the next squad', reused.platoon.squads.some((s) => s.id === 2));
+
+  kilo.clear();
+  kilo.send({ t: 'admin:rename-squad', squadId: 2, role: 'Recon', color: '#123456' });
+  const restyled = await kilo.waitForState(
+    (m) => m.platoon.squads.find((s) => s.id === 2)?.role === 'Recon',
+    'squad restyled',
+  );
+  check('a squad can be renamed', restyled.platoon.squads.find((s) => s.id === 2).role === 'Recon');
+  check(
+    'and recoloured',
+    restyled.platoon.squads.find((s) => s.id === 2).color === '#123456',
+  );
+
+  lima.clear();
+  lima.send({ t: 'admin:squad-add' });
+  const notAllowed = await lima.waitFor((m) => m.t === 'error', 'forbidden');
+  check('only the platoon leader may open squads', notAllowed.code === 'forbidden', notAllowed.code);
+
+  // Down to one, then refuse to go further.
+  for (const id of [1, 3]) {
+    kilo.clear();
+    kilo.send({ t: 'admin:squad-remove', squadId: id });
+    await kilo.waitForState((m) => !m.platoon.squads.some((s) => s.id === id), `squad ${id} closed`);
+  }
+  kilo.clear();
+  kilo.send({ t: 'admin:squad-remove', squadId: 2 });
+  await kilo.waitForState((m) => m.platoon.squads.length === 1, 'down to one squad');
+  kilo.clear();
+  kilo.send({ t: 'admin:squad-remove', squadId: 4 });
+  const lastOne = await kilo.waitFor((m) => m.t === 'error', 'last squad protected');
+  check('the last squad cannot be closed', lastOne.code === 'bad_request', lastOne.code);
+
   section('Password');
   const hotel = await new Client('Hotel').signIn();
   const india = await new Client('India').signIn();
@@ -471,7 +567,7 @@ async function main() {
   const badSquad = await alpha.waitFor((m) => m.t === 'error', 'unknown squad');
   check('an unknown squad id is rejected', badSquad.code === 'bad_request', badSquad.code);
 
-  for (const client of [alpha, bravo, charlie2, delta, echo, foxtrot, golf, hotel, india]) {
+  for (const client of [alpha, bravo, charlie2, delta, echo, foxtrot, golf, hotel, india, kilo, lima]) {
     client.close();
   }
   await sleep(200);

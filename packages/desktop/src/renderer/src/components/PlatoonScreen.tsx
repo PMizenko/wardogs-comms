@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import {
   COMMAND_CHANNEL,
+  MAX_SQUADS,
+  MIN_SQUADS,
   playersInSquad,
   unassignedPlayers,
   type PlayerState,
@@ -18,6 +20,7 @@ export function PlatoonScreen() {
   const remoteTransmit = useApp((s) => s.remoteTransmit);
   const leavePlatoon = useApp((s) => s.leavePlatoon);
   const movePlayer = useApp((s) => s.movePlayer);
+  const addSquad = useApp((s) => s.addSquad);
   const commandGrant = useApp((s) => s.grants.command);
   const squadHotkey = useApp((s) => s.settings.hotkeys.squad);
   const commandHotkey = useApp((s) => s.settings.hotkeys.command);
@@ -33,6 +36,8 @@ export function PlatoonScreen() {
   if (!platoon) return null;
 
   const canAdmin = me?.role === 'platoon_leader';
+  // Four across is as many as stays readable; more squads wrap to a second row.
+  const columns = Math.min(Math.max(platoon.squads.length, 1), 4);
   const bench = unassignedPlayers(platoon);
 
   // The command net: the platoon leader plus whoever holds each squad's slot.
@@ -152,12 +157,18 @@ export function PlatoonScreen() {
       </section>
 
       <div className="net-tree" aria-hidden="true">
-        {[12.5, 37.5, 62.5, 87.5].map((left) => (
-          <span key={left} className="net-tree__line" style={{ left: `${left}%` }} />
+        {/* One line per squad on the first row; a wrapped second row would put
+            them nowhere near their cards. */}
+        {Array.from({ length: Math.min(platoon.squads.length, columns) }, (_, i) => (
+          <span
+            key={i}
+            className="net-tree__line"
+            style={{ left: `${((i + 0.5) / columns) * 100}%` }}
+          />
         ))}
       </div>
 
-      <div className="squads">
+      <div className="squads" style={{ '--cols': columns } as CSSProperties}>
         {platoon.squads.map((squad) => {
           const members = playersInSquad(platoon, squad.id);
           return (
@@ -170,10 +181,22 @@ export function PlatoonScreen() {
               remoteTransmit={remoteTransmit}
               canAdmin={!!canAdmin}
               capacity={platoon.squadSize}
+              removable={canAdmin && platoon.squads.length > MIN_SQUADS}
               full={members.length >= platoon.squadSize && me?.squadId !== squad.id}
             />
           );
         })}
+
+        {canAdmin && platoon.squads.length < MAX_SQUADS && (
+          <button
+            className="squad squad--add"
+            onClick={addSquad}
+            title="Otevřít další squad kanál"
+          >
+            <span className="squad__add-mark">+</span>
+            Přidat squad
+          </button>
+        )}
       </div>
 
       {bench.length > 0 && (

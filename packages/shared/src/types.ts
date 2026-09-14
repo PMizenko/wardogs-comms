@@ -93,6 +93,11 @@ export interface VoiceGrants {
   allcall: ChannelGrant | null;
 }
 
+/** Whether this platoon actually has that squad right now. */
+export function hasSquad(platoon: PlatoonState, squadId: SquadId): boolean {
+  return platoon.squads.some((squad) => squad.id === squadId);
+}
+
 export function isLeader(role: PlatoonRole): boolean {
   return role === 'platoon_leader' || role === 'squad_leader';
 }

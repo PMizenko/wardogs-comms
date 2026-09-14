@@ -195,7 +195,19 @@ async function handleMessage(conn: Connection, msg: ClientMessage): Promise<void
 
     case 'admin:rename-squad':
       if (!isSquadId(msg.squadId)) throw new PlatoonError('bad_request', 'Unknown squad');
-      platoons.renameSquad(userId, msg.squadId, String(msg.role ?? ''));
+      platoons.restyleSquad(userId, msg.squadId, {
+        role: typeof msg.role === 'string' ? msg.role : undefined,
+        color: typeof msg.color === 'string' ? msg.color : undefined,
+      });
+      return;
+
+    case 'admin:squad-add':
+      platoons.addSquad(userId);
+      return;
+
+    case 'admin:squad-remove':
+      if (!isSquadId(msg.squadId)) throw new PlatoonError('bad_request', 'Unknown squad');
+      platoons.removeSquad(userId, msg.squadId);
       return;
 
     case 'admin:squad-size':

@@ -48,7 +48,7 @@ dostat — ani upraveným klientem. Když velitele degraduješ, server mu při d
 změně rosteru vystaví nové tokeny bez command místnosti a klient to spojení
 zahodí.
 
-Ověřeno testem: `npm run smoke` projede 60 kontrol včetně dekódování těch JWT.
+Ověřeno testem: `npm run smoke` projede 78 kontrol včetně dekódování těch JWT.
 
 ### Vysílání je exkluzivní
 
@@ -87,6 +87,24 @@ ho neslyšíš. Je to **jen u tebe**, nastavení se nikam neposílá.
 Vpravo dole je přepínač **PUSH-TO-TALK / OTEVŘENÝ MIK**. Otevřený mikrofon může
 běžet jen na jednom kanálu, jinak bys byl ve vzduchu dvakrát — přepnutím squadu
 na otevřený se command vrátí na PTT.
+
+### Squad kanály se dají přidávat a rušit
+
+Platoon startuje se čtyřmi squady, ale velitel platoonu si může otevřít další
+(až osm) nebo zbytečné zavřít. Každý squad je samostatný hlasový kanál, takže
+„přidat squad" znamená doopravdy novou místnost.
+
+- **Přidat** — dlaždice `+ PŘIDAT SQUAD` na konci mřížky. Nový squad dostane
+  volné číslo a barvu, kterou zatím nikdo nemá.
+- **Zavřít** — křížek v rohu karty. Kdo v něm stál, **jde na lavičku**, ne ven
+  z platoonu; jeho velitel přijde o hodnost i o velitelský kanál.
+- **Přejmenovat a přebarvit** — klikni na roli pod názvem, vedle vyjedou barvy.
+
+Poslední squad zavřít nejde. Čísla se nepřečíslovávají — názvy hlasových
+místností z nich vycházejí a přehazování by lidi uprostřed zápasu přesunulo do
+jiného kanálu. Uvolněné číslo se ale znovu použije.
+
+![Pět squadů](docs/screenshots/squads.png)
 
 ### Velikost squadu a hesla
 
@@ -378,7 +396,7 @@ scripts/
 | --- | --- |
 | `npm run dev` | Server i klient najednou |
 | `npm run livekit` | LiveKit SFU v Dockeru |
-| `npm run smoke` | 60 kontrol řídicího toku (server musí běžet) |
+| `npm run smoke` | 78 kontrol řídicího toku (server musí běžet) |
 | `npm run test:resilience` | Přežití restartu a rate limiting (server si spustí sám) |
 | `npm run dev:platoon` | Vytvoří platoon s 10 hráči a drží ho |
 | `npm run check:livekit` | Diagnostika hlasové části |

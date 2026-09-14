@@ -32,7 +32,11 @@ export type ClientMessage =
   | { t: 'admin:move'; playerId: string; squadId: SquadId | null }
   | { t: 'admin:promote'; playerId: string }
   | { t: 'admin:kick'; playerId: string }
-  | { t: 'admin:rename-squad'; squadId: SquadId; role: string }
+  | { t: 'admin:rename-squad'; squadId: SquadId; role?: string; color?: string }
+  /** Platoon-leader only: open another squad channel. */
+  | { t: 'admin:squad-add' }
+  /** Platoon-leader only: close one. Anyone in it is moved to the bench. */
+  | { t: 'admin:squad-remove'; squadId: SquadId }
   /** Platoon-leader only: how many players fit in one squad. */
   | { t: 'admin:squad-size'; size: number }
   /** Platoon-leader only: set or clear the join password (empty string clears). */

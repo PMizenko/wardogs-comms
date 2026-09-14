@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import {
+  ALLCALL_CHANNEL,
   COMMAND_CHANNEL,
   DEFAULT_SQUADS,
   type ChannelId,
@@ -70,6 +71,9 @@ interface AppState {
   promotePlayer(playerId: string): void;
   kickPlayer(playerId: string): void;
   renameSquad(squadId: SquadId, role: string): void;
+  recolourSquad(squadId: SquadId, color: string): void;
+  addSquad(): void;
+  removeSquad(squadId: SquadId): void;
   setSquadSize(size: number): void;
   setPlatoonPassword(password: string): void;
   setPlatoonListed(listed: boolean): void;
@@ -109,9 +113,10 @@ export function selectMe(state: AppState): PlayerState | null {
 export type VoiceHealth = 'idle' | 'connecting' | 'ok' | 'down';
 
 export function selectVoiceHealth(state: AppState): VoiceHealth {
-  const nets: Array<'squad' | 'command'> = [];
+  const nets: NetId[] = [];
   if (state.grants.squad) nets.push('squad');
   if (state.grants.command) nets.push('command');
+  if (state.grants.allcall) nets.push('allcall');
   if (nets.length === 0) return 'idle';
 
   const states = nets.map((net) => state.netState[net]);
@@ -200,7 +205,7 @@ export const useApp = create<AppState>((set, get) => ({
     });
 
     bridge.onHotkey(({ action, pressed }) => {
-      if (action === 'squad' || action === 'command') {
+      if (action === 'squad' || action === 'command' || action === 'allcall') {
         engine?.setHeld(action, pressed);
         return;
       }
@@ -287,6 +292,15 @@ export const useApp = create<AppState>((set, get) => ({
   },
   renameSquad(squadId, role) {
     socket?.send({ t: 'admin:rename-squad', squadId, role });
+  },
+  recolourSquad(squadId, color) {
+    socket?.send({ t: 'admin:rename-squad', squadId, color });
+  },
+  addSquad() {
+    socket?.send({ t: 'admin:squad-add' });
+  },
+  removeSquad(squadId) {
+    socket?.send({ t: 'admin:squad-remove', squadId });
   },
   setSquadSize(size) {
     socket?.send({ t: 'admin:squad-size', size });
@@ -477,8 +491,11 @@ function translateError(code: string, fallback: string): string {
 function announceTransmit(net: NetId | null): void {
   const state = useApp.getState();
   const me = selectMe(state);
-  const channelFor = (n: NetId): ChannelId | null =>
-    n === 'command' ? COMMAND_CHANNEL : (me?.squadId ?? null);
+  const channelFor = (n: NetId): ChannelId | null => {
+    if (n === 'command') return COMMAND_CHANNEL;
+    if (n === 'allcall') return ALLCALL_CHANNEL;
+    return me?.squadId ?? null;
+  };
 
   const previous = lastAnnounced;
   if (previous && previous !== net) {

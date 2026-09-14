@@ -2,7 +2,11 @@ import { EventEmitter } from 'node:events';
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 import {
   DEFAULT_SQUADS,
+  hasSquad,
   isSquadId,
+  MAX_SQUADS,
+  MIN_SQUADS,
+  SQUAD_PALETTE,
   SQUAD_SIZE_DEFAULT,
   SQUAD_SIZE_MAX,
   SQUAD_SIZE_MIN,
@@ -314,8 +318,10 @@ export class PlatoonManager extends EventEmitter {
   // --- squad assignment ---------------------------------------------------
 
   joinSquad(playerId: string, squadId: SquadId, asLeader: boolean): void {
-    if (!isSquadId(squadId)) throw new PlatoonError('bad_request', 'Unknown squad');
     const { platoon, player } = this.require(playerId);
+    if (!isSquadId(squadId) || !hasSquad(platoon, squadId)) {
+      throw new PlatoonError('bad_request', 'Unknown squad');
+    }
 
     const occupants = platoon.players.filter((p) => p.squadId === squadId && p.id !== playerId);
     if (occupants.length >= platoon.squadSize) {
@@ -375,7 +381,9 @@ export class PlatoonManager extends EventEmitter {
     if (!target) throw new PlatoonError('bad_request', 'No such player in this platoon');
 
     if (squadId !== null) {
-      if (!isSquadId(squadId)) throw new PlatoonError('bad_request', 'Unknown squad');
+      if (!isSquadId(squadId) || !hasSquad(platoon, squadId)) {
+        throw new PlatoonError('bad_request', 'Unknown squad');
+      }
       const size = platoon.players.filter((p) => p.squadId === squadId && p.id !== targetId).length;
       if (size >= platoon.squadSize) throw new PlatoonError('squad_full', 'That squad is full');
     }
@@ -419,11 +427,73 @@ export class PlatoonManager extends EventEmitter {
     this.leave(targetId);
   }
 
-  renameSquad(actorId: string, squadId: SquadId, role: string): void {
+  /** Rename a squad, recolour it, or both. */
+  restyleSquad(
+    actorId: string,
+    squadId: SquadId,
+    style: { role?: string; color?: string },
+  ): void {
     const { platoon } = this.requireLeader(actorId);
     const squad = platoon.squads.find((s) => s.id === squadId);
     if (!squad) throw new PlatoonError('bad_request', 'Unknown squad');
-    squad.role = role.trim().slice(0, 24) || squad.role;
+
+    if (typeof style.role === 'string') {
+      squad.role = style.role.trim().slice(0, 24) || squad.role;
+    }
+    if (typeof style.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(style.color)) {
+      squad.color = style.color.toLowerCase();
+    }
+    this.changed(platoon);
+  }
+
+  /**
+   * Open another squad channel.
+   *
+   * Ids are never reused while a squad lives and never renumbered: room names
+   * are built from them, so shuffling would move people between voice channels
+   * mid-match.
+   */
+  addSquad(actorId: string): SquadId {
+    const { platoon } = this.requireLeader(actorId);
+    if (platoon.squads.length >= MAX_SQUADS) {
+      throw new PlatoonError('bad_request', `A platoon holds at most ${MAX_SQUADS} squads`);
+    }
+
+    const taken = new Set(platoon.squads.map((s) => s.id));
+    let id = 1;
+    while (taken.has(id)) id += 1;
+
+    const usedColours = new Set(platoon.squads.map((s) => s.color.toLowerCase()));
+    const color =
+      SQUAD_PALETTE.find((candidate) => !usedColours.has(candidate)) ??
+      SQUAD_PALETTE[platoon.squads.length % SQUAD_PALETTE.length] ??
+      '#9aa0aa';
+
+    platoon.squads.push({ id, name: `Squad ${id}`, role: 'Nezařazeno', color });
+    platoon.squads.sort((a, b) => a.id - b.id);
+    this.changed(platoon);
+    return id;
+  }
+
+  /**
+   * Close a squad channel. Anyone standing in it is moved to the bench rather
+   * than thrown out of the platoon, and its leader loses the rank along with
+   * the command net - the server simply stops minting them those tokens.
+   */
+  removeSquad(actorId: string, squadId: SquadId): void {
+    const { platoon } = this.requireLeader(actorId);
+    if (!hasSquad(platoon, squadId)) throw new PlatoonError('bad_request', 'Unknown squad');
+    if (platoon.squads.length <= MIN_SQUADS) {
+      throw new PlatoonError('bad_request', 'A platoon needs at least one squad');
+    }
+
+    for (const player of platoon.players) {
+      if (player.squadId !== squadId) continue;
+      player.squadId = null;
+      if (player.role === 'squad_leader') player.role = 'member';
+    }
+
+    platoon.squads = platoon.squads.filter((squad) => squad.id !== squadId);
     this.changed(platoon);
   }
 
